@@ -4788,14 +4788,7 @@ function AppContent() {
   ]);
   // 💾 LOAD DO LOCALSTORAGE
   useEffect(() => {
-    let saved = localStorage.getItem(storageKey);
-    if (!saved) {
-      const legacySaved = localStorage.getItem("asa-sheet-v2");
-      if (legacySaved) {
-        saved = legacySaved;
-        localStorage.setItem(storageKey, legacySaved);
-      }
-    }
+    const saved = localStorage.getItem(storageKey);
     if (!saved) return;
     try {
       const data = JSON.parse(saved);
@@ -8552,5 +8545,5 @@ export default function App() {
 
   if (!user) return <LoginPage />;
 
-  return <AppContent />;
+  return <AppContent key={user.id} />;
 }
