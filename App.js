@@ -4064,10 +4064,7 @@ function StatusControl({ label, current, max, setCurrent, color }) {
 function AppContent() {
   const { signOut, role, user } = useAuth();
   const isDM = role === "adm";
-  const storageKey = useMemo(
-    () => `asa-sheet-v2:${user?.id || "anon"}`,
-    [user?.id]
-  );
+  const storageKey = useMemo(() => `asa-sheet-v2:${user.id}`, [user.id]);
 
   // ==========================================
   // 1. TODOS OS ESTADOS (useState) PRIMEIRO!
@@ -4741,6 +4738,8 @@ function AppContent() {
     }
 
     const payload = {
+      ownerUserId: user.id,
+      ownerEmail: user.email || "",
       nex,
       deslocamento,
       defArmadura,
@@ -4785,6 +4784,8 @@ function AppContent() {
     originLocked,
     setupComplete,
     storageKey,
+    user.id,
+    user.email,
   ]);
   // 💾 LOAD DO LOCALSTORAGE
   useEffect(() => {
@@ -4792,6 +4793,10 @@ function AppContent() {
     if (!saved) return;
     try {
       const data = JSON.parse(saved);
+      if (data?.ownerUserId && data.ownerUserId !== user.id) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
       if (data.nex) setNex(data.nex);
       if (typeof data.deslocamento === "number")
         setDeslocamento(data.deslocamento);
@@ -4829,7 +4834,7 @@ function AppContent() {
     } catch {
       /* erro silencioso */
     }
-  }, [storageKey]);
+  }, [storageKey, user.id]);
 
   if (!setupComplete) {
     return (
