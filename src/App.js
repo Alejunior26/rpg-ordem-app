@@ -4114,12 +4114,14 @@ function AppContent() {
   const [turnIndex, setTurnIndex] = useState(0);
   const [turnDoneBy, setTurnDoneBy] = useState([]);
   const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
+  const [npcNameInput, setNpcNameInput] = useState("");
   const [selectedMission, setSelectedMission] = useState("");
   const [playerCharacters, setPlayerCharacters] = useState([
     { id: `char-${Date.now()}`, nome: "" },
   ]);
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
   const [preMissionReady, setPreMissionReady] = useState(false);
+  const [characterSheets, setCharacterSheets] = useState({});
 
   const [rituaisSelecionados, setRituaisSelecionados] = useState([]);
   const [alvosRituais, setAlvosRituais] = useState({});
@@ -4192,6 +4194,7 @@ function AppContent() {
   const profileTimerRef = useRef(null);
   const prevNexRef = useRef(5);
   const isInitialMount = useRef(true);
+  const isSwitchingCharacterRef = useRef(false);
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
   const visibleCombatLogs = useMemo(
@@ -4213,6 +4216,61 @@ function AppContent() {
     if (selected?.nome?.trim()) return selected.nome.trim();
     if (nomePersonagem?.trim()) return nomePersonagem.trim();
     return user.email.split("@")[0];
+  }
+
+  function buildCharacterSnapshot() {
+    return {
+      nomePersonagem,
+      nex,
+      deslocamento,
+      defArmadura,
+      defOutros,
+      origin,
+      originLocked,
+      setupComplete,
+      attrs,
+      pvAtual,
+      peAtual,
+      sanAtual,
+      classe,
+      trilha,
+      classSkillChoices,
+      skillStates,
+      selectedPowers,
+      selectedParanormalPowers,
+      rituaisSelecionados,
+      prestigio,
+      inventario,
+    };
+  }
+
+  function applyCharacterSnapshot(data) {
+    if (!data) return;
+    if (data.nomePersonagem) setNomePersonagem(data.nomePersonagem);
+    if (data.nex) {
+      prevNexRef.current = data.nex;
+      setNex(data.nex);
+    }
+    if (typeof data.deslocamento === "number") setDeslocamento(data.deslocamento);
+    if (typeof data.defArmadura === "number") setDefArmadura(data.defArmadura);
+    if (typeof data.defOutros === "number") setDefOutros(data.defOutros);
+    if (data.origin) setOrigin(data.origin);
+    if (typeof data.originLocked === "boolean") setOriginLocked(data.originLocked);
+    if (typeof data.setupComplete === "boolean") setSetupComplete(data.setupComplete);
+    if (data.attrs) setAttrs(data.attrs);
+    if (typeof data.pvAtual === "number") setPvAtual(data.pvAtual);
+    if (typeof data.peAtual === "number") setPeAtual(data.peAtual);
+    if (typeof data.sanAtual === "number") setSanAtual(data.sanAtual);
+    if (data.classe) setClasse(data.classe);
+    if (data.trilha) setTrilha(data.trilha);
+    if (Array.isArray(data.classSkillChoices)) setClassSkillChoices(data.classSkillChoices);
+    if (data.skillStates) setSkillStates({ ...createDefaultSkillState(), ...data.skillStates });
+    if (Array.isArray(data.selectedPowers)) setSelectedPowers(data.selectedPowers);
+    if (Array.isArray(data.selectedParanormalPowers))
+      setSelectedParanormalPowers(data.selectedParanormalPowers);
+    if (Array.isArray(data.rituaisSelecionados)) setRituaisSelecionados(data.rituaisSelecionados);
+    if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
+    if (Array.isArray(data.inventario)) setInventario(data.inventario);
   }
 
   function parseFlowEvents(logs) {
@@ -4376,6 +4434,50 @@ function AppContent() {
       setPreMissionReady(false);
     }
   }, [selectedMission, selectedCharacterId]);
+
+  useEffect(() => {
+    if (!selectedCharacterId || !preMissionReady) return;
+    if (isSwitchingCharacterRef.current) return;
+    setCharacterSheets((prev) => ({
+      ...prev,
+      [selectedCharacterId]: buildCharacterSnapshot(),
+    }));
+  }, [
+    selectedCharacterId,
+    preMissionReady,
+    nomePersonagem,
+    nex,
+    deslocamento,
+    defArmadura,
+    defOutros,
+    origin,
+    originLocked,
+    setupComplete,
+    attrs,
+    pvAtual,
+    peAtual,
+    sanAtual,
+    classe,
+    trilha,
+    classSkillChoices,
+    skillStates,
+    selectedPowers,
+    selectedParanormalPowers,
+    rituaisSelecionados,
+    prestigio,
+    inventario,
+  ]);
+
+  useEffect(() => {
+    if (!selectedCharacterId || !preMissionReady) return;
+    const snapshot = characterSheets[selectedCharacterId];
+    if (!snapshot) return;
+    isSwitchingCharacterRef.current = true;
+    applyCharacterSnapshot(snapshot);
+    setTimeout(() => {
+      isSwitchingCharacterRef.current = false;
+    }, 0);
+  }, [selectedCharacterId, preMissionReady, characterSheets]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
@@ -4929,6 +5031,7 @@ function AppContent() {
       playerCharacters,
       selectedCharacterId,
       preMissionReady,
+      characterSheets,
     };
     localStorage.setItem(storageKey, JSON.stringify(payload));
   }, [
@@ -4956,6 +5059,7 @@ function AppContent() {
     playerCharacters,
     selectedCharacterId,
     preMissionReady,
+    characterSheets,
     storageKey,
     user.id,
     user.email,
@@ -5017,6 +5121,9 @@ function AppContent() {
         setSelectedCharacterId(data.selectedCharacterId);
       if (typeof data.preMissionReady === "boolean")
         setPreMissionReady(data.preMissionReady);
+      if (data.characterSheets && typeof data.characterSheets === "object") {
+        setCharacterSheets(data.characterSheets);
+      }
     } catch {
       /* erro silencioso */
     }
@@ -5108,6 +5215,41 @@ function AppContent() {
                     >
                       Selecionar
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (playerCharacters.length <= 1) {
+                          alert("Você precisa manter ao menos 1 personagem.");
+                          return;
+                        }
+                        const canDelete = window.confirm(
+                          `Excluir o personagem \"${character.nome || "sem nome"}\"?`
+                        );
+                        if (!canDelete) return;
+                        setPlayerCharacters((prev) =>
+                          prev.filter((c) => c.id !== character.id)
+                        );
+                        setCharacterSheets((prev) => {
+                          const next = { ...prev };
+                          delete next[character.id];
+                          return next;
+                        });
+                        if (selectedCharacterId === character.id) {
+                          const fallback = playerCharacters.find(
+                            (c) => c.id !== character.id
+                          );
+                          setSelectedCharacterId(fallback?.id || "");
+                        }
+                      }}
+                      style={{
+                        ...styles.btnStep,
+                        borderColor: colors.pv,
+                        color: colors.pv,
+                        minWidth: "64px",
+                      }}
+                    >
+                      Excluir
+                    </button>
                   </div>
                 ))}
               </div>
@@ -5149,10 +5291,18 @@ function AppContent() {
                   alert("Selecione um personagem com nome.");
                   return;
                 }
-                setNomePersonagem(selectedChar.nome.trim());
+                const chosenName = selectedChar.nome.trim();
+                setNomePersonagem(chosenName);
+                if (characterSheets[selectedCharacterId]) {
+                  isSwitchingCharacterRef.current = true;
+                  applyCharacterSnapshot(characterSheets[selectedCharacterId]);
+                  setTimeout(() => {
+                    isSwitchingCharacterRef.current = false;
+                  }, 0);
+                }
                 await supabase
                   .from("profiles")
-                  .update({ nome_personagem: selectedChar.nome.trim() })
+                  .update({ nome_personagem: chosenName })
                   .eq("id", user.id);
                 setPreMissionReady(true);
               }}
@@ -5492,6 +5642,10 @@ function AppContent() {
                 </button>
                 <button
                   onClick={() => {
+                    if (!nomePersonagem?.trim()) {
+                      alert("Defina o nome do personagem antes de iniciar a ficha.");
+                      return;
+                    }
                     setOriginLocked(true);
                     setSetupComplete(true);
                     setActiveTab("status");
@@ -7737,7 +7891,7 @@ function AppContent() {
                       {combatParticipants.find((p) => p.userId === turnOrder[turnIndex])?.nome ||
                         "Aguardando ordem"}
                     </div>
-                    {!isDM && turnOrder.includes(user.id) && (
+                    {turnOrder.includes(user.id) && (
                       <button
                         onClick={async () => {
                           if (turnDoneBy.includes(user.id)) return;
@@ -7777,6 +7931,37 @@ function AppContent() {
                           : "Aguardando sua vez"}
                       </button>
                     )}
+                    {isDM && turnOrder.length > 0 && turnOrder[turnIndex] !== user.id && (
+                      <button
+                        onClick={async () => {
+                          const currentId = turnOrder[turnIndex];
+                          if (!currentId || turnDoneBy.includes(currentId)) return;
+                          await emitCombatFlow("TURN_DONE", {
+                            userId: currentId,
+                            round: rodadaAtual,
+                          });
+                          const currentName =
+                            combatParticipants.find((p) => p.userId === currentId)?.nome ||
+                            "Inimigo";
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: "SISTEMA A.S.A.",
+                              acao: `Mestre encerrou o turno de ${currentName}.`,
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                        }}
+                        style={{
+                          ...styles.btnStep,
+                          width: "100%",
+                          marginTop: "8px",
+                          borderColor: colors.pe,
+                          color: colors.pe,
+                        }}
+                      >
+                        Encerrar turno atual (Mestre)
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -7792,6 +7977,36 @@ function AppContent() {
                   >
                     <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
                       ORDEM DE TURNO (MESTRE)
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+                      <input
+                        value={npcNameInput}
+                        onChange={(e) => setNpcNameInput(e.target.value)}
+                        placeholder="Nome do monstro/NPC"
+                        style={{ ...styles.selectField, padding: "8px", flex: 1 }}
+                      />
+                      <button
+                        onClick={async () => {
+                          const npcName = npcNameInput.trim();
+                          if (!npcName) return;
+                          const npcId = `npc:${npcName.toLowerCase().replace(/\s+/g, "-")}:${Date.now()}`;
+                          await emitCombatFlow("JOIN", {
+                            userId: npcId,
+                            nome: npcName,
+                          });
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: "SISTEMA A.S.A.",
+                              acao: `${npcName} entrou no combate.`,
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                          setNpcNameInput("");
+                        }}
+                        style={{ ...styles.btnStep, whiteSpace: "nowrap" }}
+                      >
+                        + NPC
+                      </button>
                     </div>
                     <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
                       {combatParticipants.map((p) => (
