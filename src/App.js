@@ -4194,6 +4194,13 @@ function AppContent() {
   const isInitialMount = useRef(true);
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
+  const visibleCombatLogs = useMemo(
+    () =>
+      combatLogs.filter(
+        (log) => !(typeof log?.acao === "string" && log.acao.startsWith("[FLOW]"))
+      ),
+    [combatLogs]
+  );
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
@@ -5019,8 +5026,40 @@ function AppContent() {
     const selectedChar = playerCharacters.find((c) => c.id === selectedCharacterId);
     return (
       <div style={styles.body}>
-        <div style={{ ...styles.container, maxWidth: "760px" }}>
-          <div style={styles.statusBox}>
+        <button
+          onClick={signOut}
+          style={{
+            position: "fixed",
+            top: isMobile ? "10px" : "20px",
+            right: isMobile ? "10px" : "20px",
+            zIndex: 9999,
+            background: "#ff1744",
+            color: "#fff",
+            border: "none",
+            padding: isMobile ? "8px 12px" : "10px 14px",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontWeight: "bold",
+            fontSize: isMobile ? "12px" : "14px",
+            boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
+          }}
+        >
+          Sair
+        </button>
+        <div
+          style={{
+            minHeight: "100vh",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: isMobile ? "72px 12px 20px" : "24px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ ...styles.container, maxWidth: "760px", width: "100%" }}>
+            <div style={styles.statusBox}>
             <h2 style={styles.sectionTitle}>PRÉ-MISSÃO</h2>
             <div style={{ marginBottom: "16px" }}>
               <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>MISSÃO</div>
@@ -5072,18 +5111,33 @@ function AppContent() {
                   </div>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setPlayerCharacters((prev) => [
-                    ...prev,
-                    { id: `char-${Date.now()}-${prev.length}`, nome: "" },
-                  ])
-                }
-                style={{ ...styles.btnStep, marginTop: "10px" }}
-              >
-                + Novo personagem
-              </button>
+              <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPlayerCharacters((prev) => [
+                      ...prev,
+                      { id: `char-${Date.now()}-${prev.length}`, nome: "" },
+                    ])
+                  }
+                  style={{ ...styles.btnStep }}
+                >
+                  + Linha de personagem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newId = `char-${Date.now()}-new`;
+                    setPlayerCharacters((prev) => [...prev, { id: newId, nome: "" }]);
+                    setSelectedCharacterId(newId);
+                    setPreMissionReady(true);
+                    setSetupComplete(false);
+                  }}
+                  style={{ ...styles.btnStep, borderColor: colors.brand, color: colors.brand }}
+                >
+                  Novo personagem (ir criar ficha)
+                </button>
+              </div>
             </div>
             <button
               onClick={async () => {
@@ -5114,6 +5168,7 @@ function AppContent() {
               Confirmar missão e personagem
             </button>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -5482,11 +5537,31 @@ function AppContent() {
         Sair
       </button>
       <button
+        onClick={() => setPreMissionReady(false)}
+        style={{
+          position: "fixed",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "164px" : "208px",
+          zIndex: 9999,
+          background: "#10131a",
+          color: "#d1d5db",
+          border: "1px solid #3a3f4b",
+          padding: isMobile ? "8px 10px" : "10px 12px",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontWeight: "bold",
+          fontSize: isMobile ? "11px" : "13px",
+        }}
+      >
+        Missão/Personagem
+      </button>
+      <button
         onClick={restartCharacterSetup}
         style={{
           position: "fixed",
           top: isMobile ? "10px" : "20px",
-          right: isMobile ? "88px" : "92px",
+          right: isMobile ? "90px" : "96px",
           zIndex: 9999,
           background: "#1a1b22",
           color: colors.brand,
@@ -7662,10 +7737,11 @@ function AppContent() {
                       {combatParticipants.find((p) => p.userId === turnOrder[turnIndex])?.nome ||
                         "Aguardando ordem"}
                     </div>
-                    {!isDM && turnOrder[turnIndex] === user.id && (
+                    {!isDM && turnOrder.includes(user.id) && (
                       <button
                         onClick={async () => {
                           if (turnDoneBy.includes(user.id)) return;
+                          if (turnOrder[turnIndex] !== user.id) return;
                           await emitCombatFlow("TURN_DONE", {
                             userId: user.id,
                             round: rodadaAtual,
@@ -7678,14 +7754,27 @@ function AppContent() {
                             },
                           ]);
                         }}
+                        disabled={turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)}
                         style={{
                           ...styles.btnStep,
                           width: "100%",
                           borderColor: "#22c55e",
                           color: "#22c55e",
+                          opacity:
+                            turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)
+                              ? 0.5
+                              : 1,
+                          cursor:
+                            turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)
+                              ? "not-allowed"
+                              : "pointer",
                         }}
                       >
-                        Finalizar meu turno
+                        {turnDoneBy.includes(user.id)
+                          ? "Turno já finalizado"
+                          : turnOrder[turnIndex] === user.id
+                          ? "Finalizar meu turno"
+                          : "Aguardando sua vez"}
                       </button>
                     )}
                   </div>
@@ -7859,7 +7948,7 @@ function AppContent() {
                     paddingRight: "10px",
                   }}
                 >
-                  {combatLogs.length === 0 && (
+                  {visibleCombatLogs.length === 0 && (
                     <p
                       style={{
                         color: "#666",
@@ -7871,7 +7960,7 @@ function AppContent() {
                       O combate ainda não começou.
                     </p>
                   )}
-                  {combatLogs.map((log) => (
+                  {visibleCombatLogs.map((log) => (
                     <div
                       key={log.id}
                       style={{
