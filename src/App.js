@@ -4159,6 +4159,9 @@ function AppContent() {
   const itemDescRef = useRef(null);
 
   const [expandedDesc, setExpandedDesc] = useState({});
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
 
   const [activeTab, setActiveTab] = useState("status");
   const [editingAttr, setEditingAttr] = useState(null);
@@ -4171,6 +4174,14 @@ function AppContent() {
   const profileTimerRef = useRef(null);
   const prevNexRef = useRef(5);
   const isInitialMount = useRef(true);
+  const isMobile = viewportWidth <= 900;
+  const isSmallMobile = viewportWidth <= 520;
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // ==========================================
   // 2. CÁLCULOS E DERIVAÇÕES (Agora é seguro usar as variáveis!)
@@ -4408,6 +4419,9 @@ function AppContent() {
       ? limitePE + attrs.PRE
       : limitePE;
   const defesaTotal = 10 + attrs.AGI + defArmadura + defOutros;
+  const mandalaSize = isSmallMobile ? 320 : isMobile ? 390 : 520;
+  const nodeSize = isSmallMobile ? 58 : isMobile ? 66 : 76;
+  const attrRadius = isSmallMobile ? 120 : isMobile ? 150 : 200;
 
   // 👇 NOVA MATEMÁTICA: LENDO OS PODERES PASSIVOS 👇
   const temSangueDeFerro = selectedParanormalPowers.includes("Sangue de Ferro");
@@ -4797,7 +4811,11 @@ function AppContent() {
         localStorage.removeItem(storageKey);
         return;
       }
-      if (data.nex) setNex(data.nex);
+      if (data.nex) {
+        // Evita abrir popup de "up de NEX" ao apenas carregar a ficha salva.
+        prevNexRef.current = data.nex;
+        setNex(data.nex);
+      }
       if (typeof data.deslocamento === "number")
         setDeslocamento(data.deslocamento);
       if (typeof data.defArmadura === "number")
@@ -5551,7 +5569,14 @@ function AppContent() {
       )}
       {/* 👆 FIM DO MODAL DE RITUAIS 👆 */}
 
-      <nav style={styles.sidebar}>
+      <nav
+        style={{
+          ...styles.sidebar,
+          width: isMobile ? "58px" : "74px",
+          gap: isMobile ? "14px" : "24px",
+          padding: isMobile ? "12px 0" : "18px 0",
+        }}
+      >
         <div
           style={{
             color: colors.brand,
@@ -5625,7 +5650,14 @@ function AppContent() {
         </button>
       </nav>
 
-      <main style={styles.mainContent}>
+      <main
+        style={{
+          ...styles.mainContent,
+          marginLeft: isMobile ? "58px" : "74px",
+          width: isMobile ? "calc(100% - 58px)" : "calc(100% - 74px)",
+          padding: isMobile ? "12px" : "20px",
+        }}
+      >
         {/* ABA 1: STATUS (BIO-MONITOR) */}
         {activeTab === "status" && (
           <div style={styles.container}>
@@ -5711,17 +5743,33 @@ function AppContent() {
               </span>
             </div>
 
-            <div style={styles.mandalaContainer}>
-              <div style={styles.centralSymbol}>
+            <div
+              style={{
+                ...styles.mandalaContainer,
+                width: `${mandalaSize}px`,
+                height: `${mandalaSize}px`,
+              }}
+            >
+              <div
+                style={{
+                  ...styles.centralSymbol,
+                  width: `${mandalaSize}px`,
+                  height: `${mandalaSize}px`,
+                }}
+              >
                 <img
                   src="https://i.imgur.com/kbm8h0V.png"
                   alt="Maestro"
-                  style={{ width: "100%", mixBlendMode: "screen" }}
+                  style={{
+                    width: "100%",
+                    maxWidth: `${mandalaSize}px`,
+                    mixBlendMode: "screen",
+                  }}
                 />
               </div>
               {ATTR_KEYS.map((key, index) => {
                 const angle = (index * 72 - 90) * (Math.PI / 180);
-                const radius = 200;
+                const radius = attrRadius;
                 const individualOffsets = {
                   FOR: { x: 0, y: 20 },
                   AGI: { x: 0, y: 15 },
@@ -5737,6 +5785,8 @@ function AppContent() {
                     key={key}
                     style={{
                       ...styles.attributeNode,
+                      width: `${nodeSize}px`,
+                      height: `${nodeSize}px`,
                       transform: `translate(${x}px, ${y}px)`,
                     }}
                     onClick={() => setEditingAttr(key)}
