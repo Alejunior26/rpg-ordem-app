@@ -58,6 +58,13 @@ const colors = {
   glow: "0 0 10px rgba(0, 229, 255, 0.4)",
 };
 
+const MISSIONS_CATALOG = [
+  "Operação Aurora",
+  "Rastro no Outro Lado",
+  "Confinamento 19",
+  "Eco de Sangue",
+];
+
 const rulesByClass = {
   Combatente: {
     pvBase: 20,
@@ -4102,6 +4109,19 @@ function AppContent() {
   const [rodadaAtual, setRodadaAtual] = useState(1);
   const [combatLogs, setCombatLogs] = useState([]);
   const [aliadosCampanha, setAliadosCampanha] = useState([]);
+  const [combatParticipants, setCombatParticipants] = useState([]);
+  const [turnOrder, setTurnOrder] = useState([]);
+  const [turnIndex, setTurnIndex] = useState(0);
+  const [turnDoneBy, setTurnDoneBy] = useState([]);
+  const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
+  const [npcNameInput, setNpcNameInput] = useState("");
+  const [selectedMission, setSelectedMission] = useState("");
+  const [playerCharacters, setPlayerCharacters] = useState([
+    { id: `char-${Date.now()}`, nome: "" },
+  ]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const [preMissionReady, setPreMissionReady] = useState(false);
+  const [characterSheets, setCharacterSheets] = useState({});
 
   const [rituaisSelecionados, setRituaisSelecionados] = useState([]);
   const [alvosRituais, setAlvosRituais] = useState({});
@@ -4159,6 +4179,9 @@ function AppContent() {
   const itemDescRef = useRef(null);
 
   const [expandedDesc, setExpandedDesc] = useState({});
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
 
   const [activeTab, setActiveTab] = useState("status");
   const [editingAttr, setEditingAttr] = useState(null);
@@ -4171,6 +4194,190 @@ function AppContent() {
   const profileTimerRef = useRef(null);
   const prevNexRef = useRef(5);
   const isInitialMount = useRef(true);
+  const isSwitchingCharacterRef = useRef(false);
+  const prevCharacterIdRef = useRef("");
+  const isMobile = viewportWidth <= 900;
+  const isSmallMobile = viewportWidth <= 520;
+  const visibleCombatLogs = useMemo(
+    () =>
+      combatLogs.filter(
+        (log) => !(typeof log?.acao === "string" && log.acao.startsWith("[FLOW]"))
+      ),
+    [combatLogs]
+  );
+  const alreadyJoinedCombat = useMemo(
+    () => combatParticipants.some((p) => p.userId === user.id),
+    [combatParticipants, user.id]
+  );
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  function getActiveCharacterName() {
+    const selected = playerCharacters.find((c) => c.id === selectedCharacterId);
+    if (selected?.nome?.trim()) return selected.nome.trim();
+    if (nomePersonagem?.trim()) return nomePersonagem.trim();
+    return user.email.split("@")[0];
+  }
+
+  function buildCharacterSnapshot() {
+    return {
+      nomePersonagem,
+      nex,
+      deslocamento,
+      defArmadura,
+      defOutros,
+      origin,
+      originLocked,
+      setupComplete,
+      attrs,
+      pvAtual,
+      peAtual,
+      sanAtual,
+      classe,
+      trilha,
+      classSkillChoices,
+      skillStates,
+      selectedPowers,
+      selectedParanormalPowers,
+      rituaisSelecionados,
+      prestigio,
+      inventario,
+    };
+  }
+
+  function applyCharacterSnapshot(data) {
+    if (!data) return;
+    if (data.nomePersonagem) setNomePersonagem(data.nomePersonagem);
+    if (data.nex) {
+      prevNexRef.current = data.nex;
+      setNex(data.nex);
+    }
+    if (typeof data.deslocamento === "number") setDeslocamento(data.deslocamento);
+    if (typeof data.defArmadura === "number") setDefArmadura(data.defArmadura);
+    if (typeof data.defOutros === "number") setDefOutros(data.defOutros);
+    if (data.origin) setOrigin(data.origin);
+    if (typeof data.originLocked === "boolean") setOriginLocked(data.originLocked);
+    if (typeof data.setupComplete === "boolean") setSetupComplete(data.setupComplete);
+    if (data.attrs) setAttrs(data.attrs);
+    if (typeof data.pvAtual === "number") setPvAtual(data.pvAtual);
+    if (typeof data.peAtual === "number") setPeAtual(data.peAtual);
+    if (typeof data.sanAtual === "number") setSanAtual(data.sanAtual);
+    if (data.classe) setClasse(data.classe);
+    if (data.trilha) setTrilha(data.trilha);
+    if (Array.isArray(data.classSkillChoices)) setClassSkillChoices(data.classSkillChoices);
+    if (data.skillStates) setSkillStates({ ...createDefaultSkillState(), ...data.skillStates });
+    if (Array.isArray(data.selectedPowers)) setSelectedPowers(data.selectedPowers);
+    if (Array.isArray(data.selectedParanormalPowers))
+      setSelectedParanormalPowers(data.selectedParanormalPowers);
+    if (Array.isArray(data.rituaisSelecionados)) setRituaisSelecionados(data.rituaisSelecionados);
+    if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
+    if (Array.isArray(data.inventario)) setInventario(data.inventario);
+  }
+
+  function resetCharacterDraftDefaults(characterName = "") {
+    prevNexRef.current = 5;
+    setNomePersonagem(characterName);
+    setNex(5);
+    setDeslocamento(9);
+    setDefArmadura(0);
+    setDefOutros(0);
+    setOrigin("Acadêmico");
+    setOriginLocked(false);
+    setSetupStep(1);
+    setSetupComplete(false);
+    setAttrs({
+      FOR: 1,
+      AGI: 2,
+      INT: 2,
+      VIG: 2,
+      PRE: 2,
+    });
+    setPvAtual(20);
+    setPeAtual(4);
+    setSanAtual(12);
+    setClasse("Combatente");
+    setTrilha(rulesByClass.Combatente.defaultTrilha);
+    setClassSkillChoices(["", ""]);
+    setSkillStates(createDefaultSkillState());
+    setSelectedPowers([]);
+    setSelectedParanormalPowers([]);
+    setRituaisSelecionados([]);
+    setAlvosRituais({});
+    setVersoesRituais({});
+    setPrestigio(0);
+    setInventario([]);
+  }
+
+  function parseFlowEvents(logs) {
+    const events = [];
+    for (const log of [...logs].reverse()) {
+      if (!log?.acao || typeof log.acao !== "string") continue;
+      if (!log.acao.startsWith("[FLOW]")) continue;
+      const raw = log.acao.slice(6);
+      try {
+        const event = JSON.parse(raw);
+        events.push(event);
+      } catch {
+        // ignora evento inválido
+      }
+    }
+    return events;
+  }
+
+  function computeCombatFlow(logs, currentRound) {
+    const joinedByUser = new Map();
+    let order = [];
+    let done = [];
+    let idx = 0;
+
+    for (const event of parseFlowEvents(logs)) {
+      if (event?.event === "JOIN" && event?.payload?.userId) {
+        joinedByUser.set(event.payload.userId, {
+          userId: event.payload.userId,
+          nome: event.payload.nome || "Sem nome",
+        });
+      }
+      if (event?.event === "SET_ORDER" && Array.isArray(event?.payload?.order)) {
+        order = event.payload.order;
+        idx = 0;
+        done = [];
+      }
+      if (
+        event?.event === "TURN_DONE" &&
+        event?.payload?.userId &&
+        Number(event?.payload?.round) === Number(currentRound)
+      ) {
+        if (!done.includes(event.payload.userId)) done.push(event.payload.userId);
+        if (order[idx] === event.payload.userId) {
+          idx = Math.min(idx + 1, Math.max(order.length - 1, 0));
+        }
+      }
+      if (
+        event?.event === "ROUND_RESET" &&
+        Number(event?.payload?.round) === Number(currentRound)
+      ) {
+        idx = 0;
+        done = [];
+      }
+    }
+
+    const participants = [...joinedByUser.values()];
+    return { participants, order, done, idx };
+  }
+
+  async function emitCombatFlow(event, payload) {
+    await supabase.from("combat_log").insert([
+      {
+        personagem: "SISTEMA FLOW",
+        acao: `[FLOW]${JSON.stringify({ event, payload, at: Date.now() })}`,
+        rodada: rodadaAtual,
+      },
+    ]);
+  }
 
   // ==========================================
   // 2. CÁLCULOS E DERIVAÇÕES (Agora é seguro usar as variáveis!)
@@ -4254,6 +4461,64 @@ function AppContent() {
     if (canUseCursedItems) return;
     if (maldicoesSelecionadas.length > 0) setMaldicoesSelecionadas([]);
   }, [canUseCursedItems, maldicoesSelecionadas]);
+
+  useEffect(() => {
+    if (!selectedCharacterId && playerCharacters.length > 0) {
+      setSelectedCharacterId(playerCharacters[0].id);
+    }
+  }, [selectedCharacterId, playerCharacters]);
+
+  useEffect(() => {
+    if (!selectedMission || !selectedCharacterId) {
+      setPreMissionReady(false);
+    }
+  }, [selectedMission, selectedCharacterId]);
+
+  useEffect(() => {
+    if (!selectedCharacterId || !preMissionReady) return;
+    if (isSwitchingCharacterRef.current) return;
+    setCharacterSheets((prev) => ({
+      ...prev,
+      [selectedCharacterId]: buildCharacterSnapshot(),
+    }));
+  }, [
+    selectedCharacterId,
+    preMissionReady,
+    nomePersonagem,
+    nex,
+    deslocamento,
+    defArmadura,
+    defOutros,
+    origin,
+    originLocked,
+    setupComplete,
+    attrs,
+    pvAtual,
+    peAtual,
+    sanAtual,
+    classe,
+    trilha,
+    classSkillChoices,
+    skillStates,
+    selectedPowers,
+    selectedParanormalPowers,
+    rituaisSelecionados,
+    prestigio,
+    inventario,
+  ]);
+
+  useEffect(() => {
+    if (!selectedCharacterId || !preMissionReady) return;
+    if (prevCharacterIdRef.current === selectedCharacterId) return;
+    prevCharacterIdRef.current = selectedCharacterId;
+    const snapshot = characterSheets[selectedCharacterId];
+    if (!snapshot) return;
+    isSwitchingCharacterRef.current = true;
+    applyCharacterSnapshot(snapshot);
+    setTimeout(() => {
+      isSwitchingCharacterRef.current = false;
+    }, 0);
+  }, [selectedCharacterId, preMissionReady]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
@@ -4343,11 +4608,44 @@ function AppContent() {
     };
   }, [user]);
 
+  useEffect(() => {
+    const flow = computeCombatFlow(combatLogs, rodadaAtual);
+    setCombatParticipants(flow.participants);
+    setTurnOrder(flow.order);
+    setTurnDoneBy(flow.done);
+    setTurnIndex(flow.idx);
+  }, [combatLogs, rodadaAtual]);
+
+  useEffect(() => {
+    if (turnOrder.length > 0) {
+      setSelectedOrderDraft(turnOrder);
+      return;
+    }
+    setSelectedOrderDraft((prev) => {
+      if (prev.length > 0) return prev;
+      return combatParticipants.map((p) => p.userId);
+    });
+  }, [turnOrder, combatParticipants]);
+
   // Função exclusiva do Mestre
   const avancarRodada = async () => {
+    if (!isDM) return;
+    if (!turnOrder.length) {
+      alert("Defina a ordem do turno antes de avançar rodada.");
+      return;
+    }
+    const pendentes = turnOrder.filter((id) => !turnDoneBy.includes(id));
+    if (pendentes.length > 0) {
+      const nomesPendentes = pendentes
+        .map((id) => combatParticipants.find((p) => p.userId === id)?.nome || id)
+        .join(", ");
+      alert(`Ainda faltam agir nesta rodada: ${nomesPendentes}`);
+      return;
+    }
     const prox = rodadaAtual + 1;
     setRodadaAtual(prox);
     await supabase.from("combat_state").update({ rodada: prox }).eq("id", 1);
+    await emitCombatFlow("ROUND_RESET", { round: prox });
     await supabase.from("combat_log").insert([
       {
         personagem: "SISTEMA A.S.A.",
@@ -4376,6 +4674,13 @@ function AppContent() {
         const myProfile = data.find((p) => p.id === user.id);
         if (myProfile?.nome_personagem) {
           setNomePersonagem(myProfile.nome_personagem);
+          setPlayerCharacters((prev) => {
+            if (prev.some((c) => c.nome === myProfile.nome_personagem)) return prev;
+            return [
+              ...prev,
+              { id: `char-${Date.now()}-main`, nome: myProfile.nome_personagem },
+            ];
+          });
         }
       }
     }
@@ -4408,6 +4713,9 @@ function AppContent() {
       ? limitePE + attrs.PRE
       : limitePE;
   const defesaTotal = 10 + attrs.AGI + defArmadura + defOutros;
+  const mandalaSize = isSmallMobile ? 320 : isMobile ? 390 : 520;
+  const nodeSize = isSmallMobile ? 58 : isMobile ? 66 : 76;
+  const attrRadius = isSmallMobile ? 120 : isMobile ? 150 : 200;
 
   // 👇 NOVA MATEMÁTICA: LENDO OS PODERES PASSIVOS 👇
   const temSangueDeFerro = selectedParanormalPowers.includes("Sangue de Ferro");
@@ -4760,6 +5068,11 @@ function AppContent() {
       inventario,
       originLocked,
       setupComplete,
+      selectedMission,
+      playerCharacters,
+      selectedCharacterId,
+      preMissionReady,
+      characterSheets,
     };
     localStorage.setItem(storageKey, JSON.stringify(payload));
   }, [
@@ -4783,6 +5096,11 @@ function AppContent() {
     inventario,
     originLocked,
     setupComplete,
+    selectedMission,
+    playerCharacters,
+    selectedCharacterId,
+    preMissionReady,
+    characterSheets,
     storageKey,
     user.id,
     user.email,
@@ -4797,7 +5115,11 @@ function AppContent() {
         localStorage.removeItem(storageKey);
         return;
       }
-      if (data.nex) setNex(data.nex);
+      if (data.nex) {
+        // Evita abrir popup de "up de NEX" ao apenas carregar a ficha salva.
+        prevNexRef.current = data.nex;
+        setNex(data.nex);
+      }
       if (typeof data.deslocamento === "number")
         setDeslocamento(data.deslocamento);
       if (typeof data.defArmadura === "number")
@@ -4831,10 +5153,241 @@ function AppContent() {
       // 👈 CARREGANDO INVENTÁRIO
       if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
       if (Array.isArray(data.inventario)) setInventario(data.inventario);
+      if (typeof data.selectedMission === "string")
+        setSelectedMission(data.selectedMission);
+      if (Array.isArray(data.playerCharacters) && data.playerCharacters.length) {
+        setPlayerCharacters(data.playerCharacters);
+      }
+      if (typeof data.selectedCharacterId === "string")
+        setSelectedCharacterId(data.selectedCharacterId);
+      if (typeof data.preMissionReady === "boolean")
+        setPreMissionReady(data.preMissionReady);
+      if (data.characterSheets && typeof data.characterSheets === "object") {
+        setCharacterSheets(data.characterSheets);
+      }
     } catch {
       /* erro silencioso */
     }
   }, [storageKey, user.id]);
+
+  if (!preMissionReady) {
+    const selectedChar = playerCharacters.find((c) => c.id === selectedCharacterId);
+    return (
+      <div style={styles.body}>
+        <button
+          onClick={signOut}
+          style={{
+            position: "fixed",
+            top: isMobile ? "10px" : "20px",
+            right: isMobile ? "10px" : "20px",
+            zIndex: 9999,
+            background: "#ff1744",
+            color: "#fff",
+            border: "none",
+            padding: isMobile ? "8px 12px" : "10px 14px",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontWeight: "bold",
+            fontSize: isMobile ? "12px" : "14px",
+            boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
+          }}
+        >
+          Sair
+        </button>
+        <div
+          style={{
+            minHeight: "100vh",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: isMobile ? "72px 12px 20px" : "24px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ ...styles.container, maxWidth: "760px", width: "100%" }}>
+            <div style={styles.statusBox}>
+            <h2 style={styles.sectionTitle}>PRÉ-MISSÃO</h2>
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>MISSÃO</div>
+              <select
+                value={selectedMission}
+                onChange={(e) => setSelectedMission(e.target.value)}
+                style={styles.selectField}
+              >
+                <option value="">Selecione a missão</option>
+                {MISSIONS_CATALOG.map((mission) => (
+                  <option key={mission} value={mission}>
+                    {mission}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>
+                PERSONAGENS DO AGENTE
+              </div>
+              <div style={{ display: "grid", gap: "8px" }}>
+                {playerCharacters.map((character) => (
+                  <div key={character.id} style={{ display: "flex", gap: "8px" }}>
+                    <input
+                      value={character.nome}
+                      onChange={(e) =>
+                        setPlayerCharacters((prev) =>
+                          prev.map((c) =>
+                            c.id === character.id ? { ...c, nome: e.target.value } : c
+                          )
+                        )
+                      }
+                      placeholder="Nome do personagem"
+                      style={{ ...styles.selectField, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCharacterId(character.id)}
+                      style={{
+                        ...styles.btnStep,
+                        borderColor:
+                          selectedCharacterId === character.id ? colors.brand : "#333",
+                        color: selectedCharacterId === character.id ? colors.brand : "#888",
+                        minWidth: "92px",
+                      }}
+                    >
+                      Selecionar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (playerCharacters.length <= 1) {
+                          alert("Você precisa manter ao menos 1 personagem.");
+                          return;
+                        }
+                        const canDelete = window.confirm(
+                          `Excluir o personagem \"${character.nome || "sem nome"}\"?`
+                        );
+                        if (!canDelete) return;
+                        setPlayerCharacters((prev) =>
+                          prev.filter((c) => c.id !== character.id)
+                        );
+                        setCharacterSheets((prev) => {
+                          const next = { ...prev };
+                          delete next[character.id];
+                          return next;
+                        });
+                        if (selectedCharacterId === character.id) {
+                          const fallback = playerCharacters.find(
+                            (c) => c.id !== character.id
+                          );
+                          setSelectedCharacterId(fallback?.id || "");
+                        }
+                      }}
+                      style={{
+                        ...styles.btnStep,
+                        borderColor: colors.pv,
+                        color: colors.pv,
+                        minWidth: "64px",
+                      }}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const requestedName = window.prompt("Nome do personagem:")?.trim();
+                    if (!requestedName) {
+                      alert("Você precisa informar um nome.");
+                      return;
+                    }
+                    setPlayerCharacters((prev) => [
+                      ...prev,
+                      { id: `char-${Date.now()}-${prev.length}`, nome: requestedName },
+                    ]);
+                  }}
+                  style={{ ...styles.btnStep }}
+                >
+                  + Adicionar personagem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const requestedName = window
+                      .prompt("Nome do novo personagem:")
+                      ?.trim();
+                    if (!requestedName) {
+                      alert("Você precisa informar um nome para criar personagem.");
+                      return;
+                    }
+                    const newId = `char-${Date.now()}-new`;
+                    setCharacterSheets((prev) => ({
+                      ...prev,
+                      [newId]: undefined,
+                    }));
+                    setPlayerCharacters((prev) => [
+                      ...prev,
+                      { id: newId, nome: requestedName },
+                    ]);
+                    setSelectedCharacterId(newId);
+                    prevCharacterIdRef.current = newId;
+                    isSwitchingCharacterRef.current = true;
+                    resetCharacterDraftDefaults(requestedName);
+                    setTimeout(() => {
+                      isSwitchingCharacterRef.current = false;
+                    }, 0);
+                    setPreMissionReady(true);
+                  }}
+                  style={{ ...styles.btnStep, borderColor: colors.brand, color: colors.brand }}
+                >
+                  Novo personagem (ir criar ficha)
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                if (!selectedMission) {
+                  alert("Escolha a missão para continuar.");
+                  return;
+                }
+                if (!selectedChar?.nome?.trim()) {
+                  alert("Selecione um personagem com nome.");
+                  return;
+                }
+                const chosenName = selectedChar.nome.trim();
+                setNomePersonagem(chosenName);
+                if (characterSheets[selectedCharacterId]) {
+                  isSwitchingCharacterRef.current = true;
+                  applyCharacterSnapshot(characterSheets[selectedCharacterId]);
+                  setTimeout(() => {
+                    isSwitchingCharacterRef.current = false;
+                  }, 0);
+                }
+                await supabase
+                  .from("profiles")
+                  .update({ nome_personagem: chosenName })
+                  .eq("id", user.id);
+                setPreMissionReady(true);
+              }}
+              style={{
+                ...styles.btnStep,
+                width: "100%",
+                marginTop: "8px",
+                borderColor: colors.brand,
+                color: colors.brand,
+                fontWeight: "bold",
+              }}
+            >
+              Confirmar missão e personagem
+            </button>
+          </div>
+        </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!setupComplete) {
     return (
@@ -4843,17 +5396,18 @@ function AppContent() {
           onClick={signOut}
           style={{
             position: "fixed",
-            top: "20px",
-            right: "20px",
+            top: isMobile ? "10px" : "20px",
+            right: isMobile ? "10px" : "20px",
             zIndex: 9999,
             background: "#ff1744",
             color: "#fff",
             border: "none",
-            padding: "10px 14px",
+            padding: isMobile ? "8px 12px" : "10px 14px",
             borderRadius: "8px",
             cursor: "pointer",
             fontFamily: "inherit",
             fontWeight: "bold",
+            fontSize: isMobile ? "12px" : "14px",
             boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
           }}
         >
@@ -4864,7 +5418,7 @@ function AppContent() {
             width: "100%",
             maxWidth: "900px",
             margin: "0 auto",
-            padding: "40px 20px",
+            padding: isMobile ? "72px 12px 20px" : "40px 20px",
           }}
         >
           <div style={{ ...styles.summaryCard, marginBottom: "14px" }}>
@@ -4888,7 +5442,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 1/4 · ORIGEM
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1.1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {Object.keys(originsData).map((item) => (
                     <button
@@ -4957,7 +5517,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 2/4 · CLASSE
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {["Combatente", "Especialista", "Ocultista"].map((c) => (
                     <button
@@ -5054,7 +5620,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 3/4 · TRILHA
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {trilhasDisponiveis.map((t) => (
                     <button
@@ -5135,6 +5707,10 @@ function AppContent() {
                 </button>
                 <button
                   onClick={() => {
+                    if (!nomePersonagem?.trim()) {
+                      alert("Defina o nome do personagem antes de iniciar a ficha.");
+                      return;
+                    }
                     setOriginLocked(true);
                     setSetupComplete(true);
                     setActiveTab("status");
@@ -5162,37 +5738,59 @@ function AppContent() {
         onClick={signOut}
         style={{
           position: "fixed",
-          top: "20px",
-          right: "20px",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "10px" : "20px",
           zIndex: 9999,
           background: "#ff1744",
           color: "#fff",
           border: "none",
-          padding: "10px 14px",
+          padding: isMobile ? "8px 12px" : "10px 14px",
           borderRadius: "8px",
           cursor: "pointer",
           fontFamily: "inherit",
           fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
           boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
         }}
       >
         Sair
       </button>
       <button
-        onClick={restartCharacterSetup}
+        onClick={() => setPreMissionReady(false)}
         style={{
           position: "fixed",
-          top: "20px",
-          right: "92px",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "164px" : "208px",
           zIndex: 9999,
-          background: "#1a1b22",
-          color: colors.brand,
-          border: `1px solid ${colors.brand}66`,
-          padding: "10px 12px",
+          background: "#10131a",
+          color: "#d1d5db",
+          border: "1px solid #3a3f4b",
+          padding: isMobile ? "8px 10px" : "10px 12px",
           borderRadius: "8px",
           cursor: "pointer",
           fontFamily: "inherit",
           fontWeight: "bold",
+          fontSize: isMobile ? "11px" : "13px",
+        }}
+      >
+        Missão/Personagem
+      </button>
+      <button
+        onClick={restartCharacterSetup}
+        style={{
+          position: "fixed",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "90px" : "96px",
+          zIndex: 9999,
+          background: "#1a1b22",
+          color: colors.brand,
+          border: `1px solid ${colors.brand}66`,
+          padding: isMobile ? "8px 10px" : "10px 12px",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
         }}
       >
         Recomeçar
@@ -5551,7 +6149,14 @@ function AppContent() {
       )}
       {/* 👆 FIM DO MODAL DE RITUAIS 👆 */}
 
-      <nav style={styles.sidebar}>
+      <nav
+        style={{
+          ...styles.sidebar,
+          width: isMobile ? "58px" : "74px",
+          gap: isMobile ? "14px" : "24px",
+          padding: isMobile ? "12px 0" : "18px 0",
+        }}
+      >
         <div
           style={{
             color: colors.brand,
@@ -5567,6 +6172,7 @@ function AppContent() {
           onClick={() => setActiveTab("status")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "status" ? colors.brand : "#333",
           }}
           title="Bio-Monitor"
@@ -5577,6 +6183,7 @@ function AppContent() {
           onClick={() => setActiveTab("classe")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "classe" ? colors.brand : "#333",
           }}
           title="Arquétipo"
@@ -5587,6 +6194,7 @@ function AppContent() {
           onClick={() => setActiveTab("pericias")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "pericias" ? colors.brand : "#333",
           }}
           title="Perícias"
@@ -5597,6 +6205,7 @@ function AppContent() {
           onClick={() => setActiveTab("rituais")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "rituais" ? colors.brand : "#333",
           }}
           title="Rituais"
@@ -5607,6 +6216,7 @@ function AppContent() {
           onClick={() => setActiveTab("inventario")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "inventario" ? colors.brand : "#333",
           }}
           title="Inventário"
@@ -5617,6 +6227,7 @@ function AppContent() {
           onClick={() => setActiveTab("combate")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "combate" ? colors.brand : "#333",
           }}
           title="Mesa de Combate"
@@ -5625,7 +6236,14 @@ function AppContent() {
         </button>
       </nav>
 
-      <main style={styles.mainContent}>
+      <main
+        style={{
+          ...styles.mainContent,
+          marginLeft: isMobile ? "58px" : "74px",
+          width: isMobile ? "calc(100% - 58px)" : "calc(100% - 74px)",
+          padding: isMobile ? "12px" : "20px",
+        }}
+      >
         {/* ABA 1: STATUS (BIO-MONITOR) */}
         {activeTab === "status" && (
           <div style={styles.container}>
@@ -5633,7 +6251,8 @@ function AppContent() {
               <h2
                 style={{
                   color: colors.brand,
-                  letterSpacing: "5px",
+                  letterSpacing: isMobile ? "2px" : "5px",
+                  fontSize: isMobile ? "24px" : "30px",
                   margin: 0,
                   textShadow: colors.glow,
                 }}
@@ -5711,17 +6330,33 @@ function AppContent() {
               </span>
             </div>
 
-            <div style={styles.mandalaContainer}>
-              <div style={styles.centralSymbol}>
+            <div
+              style={{
+                ...styles.mandalaContainer,
+                width: `${mandalaSize}px`,
+                height: `${mandalaSize}px`,
+              }}
+            >
+              <div
+                style={{
+                  ...styles.centralSymbol,
+                  width: `${mandalaSize}px`,
+                  height: `${mandalaSize}px`,
+                }}
+              >
                 <img
                   src="https://i.imgur.com/kbm8h0V.png"
                   alt="Maestro"
-                  style={{ width: "100%", mixBlendMode: "screen" }}
+                  style={{
+                    width: "100%",
+                    maxWidth: `${mandalaSize}px`,
+                    mixBlendMode: "screen",
+                  }}
                 />
               </div>
               {ATTR_KEYS.map((key, index) => {
                 const angle = (index * 72 - 90) * (Math.PI / 180);
-                const radius = 200;
+                const radius = attrRadius;
                 const individualOffsets = {
                   FOR: { x: 0, y: 20 },
                   AGI: { x: 0, y: 15 },
@@ -5737,6 +6372,8 @@ function AppContent() {
                     key={key}
                     style={{
                       ...styles.attributeNode,
+                      width: `${nodeSize}px`,
+                      height: `${nodeSize}px`,
                       transform: `translate(${x}px, ${y}px)`,
                     }}
                     onClick={() => setEditingAttr(key)}
@@ -6662,7 +7299,7 @@ function AppContent() {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    minWidth: "760px",
+                    minWidth: isMobile ? "620px" : "760px",
                   }}
                 >
                   <thead>
@@ -7238,9 +7875,9 @@ function AppContent() {
                 style={{
                   ...styles.statusBox,
                   flex: 1,
-                  minWidth: "300px",
+                  minWidth: isMobile ? "0" : "300px",
                   textAlign: "center",
-                  padding: "40px",
+                  padding: isMobile ? "20px" : "40px",
                 }}
               >
                 <h2
@@ -7261,6 +7898,240 @@ function AppContent() {
                 >
                   Sincronização em tempo real
                 </p>
+
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: "10px",
+                    padding: "10px",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                    MISSÃO ATIVA
+                  </div>
+                  <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "10px" }}>
+                    {selectedMission || "Sem missão selecionada"}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (alreadyJoinedCombat) return;
+                      const activeName = getActiveCharacterName();
+                      await emitCombatFlow("JOIN", {
+                        userId: user.id,
+                        nome: activeName,
+                      });
+                      await supabase.from("combat_log").insert([
+                        {
+                          personagem: activeName,
+                          acao: "Entrou no combate.",
+                          rodada: rodadaAtual,
+                        },
+                      ]);
+                    }}
+                    style={{
+                      ...styles.btnStep,
+                      width: "100%",
+                      borderColor: colors.brand,
+                      color: colors.brand,
+                      opacity: alreadyJoinedCombat ? 0.5 : 1,
+                      cursor: alreadyJoinedCombat ? "not-allowed" : "pointer",
+                    }}
+                    disabled={alreadyJoinedCombat}
+                  >
+                    {alreadyJoinedCombat ? "Você já entrou no combate" : "Entrar no combate"}
+                  </button>
+                </div>
+
+                {!!turnOrder.length && (
+                  <div
+                    style={{
+                      marginBottom: "16px",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "10px",
+                      padding: "10px",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                      TURNO ATUAL
+                    </div>
+                    <div style={{ color: colors.brand, fontWeight: "bold", marginBottom: "8px" }}>
+                      {combatParticipants.find((p) => p.userId === turnOrder[turnIndex])?.nome ||
+                        "Aguardando ordem"}
+                    </div>
+                    {turnOrder.includes(user.id) && (
+                      <button
+                        onClick={async () => {
+                          if (turnDoneBy.includes(user.id)) return;
+                          if (turnOrder[turnIndex] !== user.id) return;
+                          await emitCombatFlow("TURN_DONE", {
+                            userId: user.id,
+                            round: rodadaAtual,
+                          });
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: getActiveCharacterName(),
+                              acao: "Finalizou o turno.",
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                        }}
+                        disabled={turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)}
+                        style={{
+                          ...styles.btnStep,
+                          width: "100%",
+                          borderColor: "#22c55e",
+                          color: "#22c55e",
+                          opacity:
+                            turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)
+                              ? 0.5
+                              : 1,
+                          cursor:
+                            turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {turnDoneBy.includes(user.id)
+                          ? "Turno já finalizado"
+                          : turnOrder[turnIndex] === user.id
+                          ? "Finalizar meu turno"
+                          : "Aguardando sua vez"}
+                      </button>
+                    )}
+                    {isDM && turnOrder.length > 0 && turnOrder[turnIndex] !== user.id && (
+                      <button
+                        onClick={async () => {
+                          const currentId = turnOrder[turnIndex];
+                          if (!currentId || turnDoneBy.includes(currentId)) return;
+                          await emitCombatFlow("TURN_DONE", {
+                            userId: currentId,
+                            round: rodadaAtual,
+                          });
+                          const currentName =
+                            combatParticipants.find((p) => p.userId === currentId)?.nome ||
+                            "Inimigo";
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: "SISTEMA A.S.A.",
+                              acao: `Mestre encerrou o turno de ${currentName}.`,
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                        }}
+                        style={{
+                          ...styles.btnStep,
+                          width: "100%",
+                          marginTop: "8px",
+                          borderColor: colors.pe,
+                          color: colors.pe,
+                        }}
+                      >
+                        Encerrar turno atual (Mestre)
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {isDM && (
+                  <div
+                    style={{
+                      marginBottom: "20px",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "10px",
+                      padding: "10px",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                      ORDEM DE TURNO (MESTRE)
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+                      <input
+                        value={npcNameInput}
+                        onChange={(e) => setNpcNameInput(e.target.value)}
+                        placeholder="Nome do monstro/NPC"
+                        style={{ ...styles.selectField, padding: "8px", flex: 1 }}
+                      />
+                      <button
+                        onClick={async () => {
+                          const npcName = npcNameInput.trim();
+                          if (!npcName) return;
+                          const npcId = `npc:${npcName.toLowerCase().replace(/\s+/g, "-")}:${Date.now()}`;
+                          await emitCombatFlow("JOIN", {
+                            userId: npcId,
+                            nome: npcName,
+                          });
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: "SISTEMA A.S.A.",
+                              acao: `${npcName} entrou no combate.`,
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                          setNpcNameInput("");
+                        }}
+                        style={{ ...styles.btnStep, whiteSpace: "nowrap" }}
+                      >
+                        + NPC
+                      </button>
+                    </div>
+                    <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
+                      {combatParticipants.map((p) => (
+                        <label
+                          key={p.userId}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            color: "#d1d5db",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderDraft.includes(p.userId)}
+                            onChange={() =>
+                              setSelectedOrderDraft((prev) =>
+                                prev.includes(p.userId)
+                                  ? prev.filter((id) => id !== p.userId)
+                                  : [...prev, p.userId]
+                              )
+                            }
+                          />
+                          {p.nome}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!selectedOrderDraft.length) {
+                          alert("Selecione ao menos 1 participante.");
+                          return;
+                        }
+                        await emitCombatFlow("SET_ORDER", {
+                          order: selectedOrderDraft,
+                        });
+                        await supabase.from("combat_log").insert([
+                          {
+                            personagem: "SISTEMA A.S.A.",
+                            acao: `Ordem definida pelo mestre (${selectedOrderDraft.length} participantes).`,
+                            rodada: rodadaAtual,
+                          },
+                        ]);
+                      }}
+                      style={{
+                        ...styles.btnStep,
+                        width: "100%",
+                        borderColor: colors.brand,
+                        color: colors.brand,
+                      }}
+                    >
+                      Definir ordem selecionada
+                    </button>
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -7336,7 +8207,7 @@ function AppContent() {
                 style={{
                   ...styles.statusBox,
                   flex: 2,
-                  minWidth: "300px",
+                  minWidth: isMobile ? "0" : "300px",
                   padding: "24px",
                 }}
               >
@@ -7361,7 +8232,7 @@ function AppContent() {
                     paddingRight: "10px",
                   }}
                 >
-                  {combatLogs.length === 0 && (
+                  {visibleCombatLogs.length === 0 && (
                     <p
                       style={{
                         color: "#666",
@@ -7373,7 +8244,7 @@ function AppContent() {
                       O combate ainda não começou.
                     </p>
                   )}
-                  {combatLogs.map((log) => (
+                  {visibleCombatLogs.map((log) => (
                     <div
                       key={log.id}
                       style={{
