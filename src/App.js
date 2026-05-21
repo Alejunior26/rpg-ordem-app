@@ -4205,6 +4205,10 @@ function AppContent() {
       ),
     [combatLogs]
   );
+  const alreadyJoinedCombat = useMemo(
+    () => combatParticipants.some((p) => p.userId === user.id),
+    [combatParticipants, user.id]
+  );
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
@@ -4272,6 +4276,40 @@ function AppContent() {
     if (Array.isArray(data.rituaisSelecionados)) setRituaisSelecionados(data.rituaisSelecionados);
     if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
     if (Array.isArray(data.inventario)) setInventario(data.inventario);
+  }
+
+  function resetCharacterDraftDefaults(characterName = "") {
+    prevNexRef.current = 5;
+    setNomePersonagem(characterName);
+    setNex(5);
+    setDeslocamento(9);
+    setDefArmadura(0);
+    setDefOutros(0);
+    setOrigin("Acadêmico");
+    setOriginLocked(false);
+    setSetupStep(1);
+    setSetupComplete(false);
+    setAttrs({
+      FOR: 1,
+      AGI: 2,
+      INT: 2,
+      VIG: 2,
+      PRE: 2,
+    });
+    setPvAtual(20);
+    setPeAtual(4);
+    setSanAtual(12);
+    setClasse("Combatente");
+    setTrilha(rulesByClass.Combatente.defaultTrilha);
+    setClassSkillChoices(["", ""]);
+    setSkillStates(createDefaultSkillState());
+    setSelectedPowers([]);
+    setSelectedParanormalPowers([]);
+    setRituaisSelecionados([]);
+    setAlvosRituais({});
+    setVersoesRituais({});
+    setPrestigio(0);
+    setInventario([]);
   }
 
   function parseFlowEvents(logs) {
@@ -5259,24 +5297,48 @@ function AppContent() {
               <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    const requestedName = window.prompt("Nome do personagem:")?.trim();
+                    if (!requestedName) {
+                      alert("Você precisa informar um nome.");
+                      return;
+                    }
                     setPlayerCharacters((prev) => [
                       ...prev,
-                      { id: `char-${Date.now()}-${prev.length}`, nome: "" },
-                    ])
-                  }
+                      { id: `char-${Date.now()}-${prev.length}`, nome: requestedName },
+                    ]);
+                  }}
                   style={{ ...styles.btnStep }}
                 >
-                  + Linha de personagem
+                  + Adicionar personagem
                 </button>
                 <button
                   type="button"
                   onClick={() => {
+                    const requestedName = window
+                      .prompt("Nome do novo personagem:")
+                      ?.trim();
+                    if (!requestedName) {
+                      alert("Você precisa informar um nome para criar personagem.");
+                      return;
+                    }
                     const newId = `char-${Date.now()}-new`;
-                    setPlayerCharacters((prev) => [...prev, { id: newId, nome: "" }]);
+                    setCharacterSheets((prev) => ({
+                      ...prev,
+                      [newId]: undefined,
+                    }));
+                    setPlayerCharacters((prev) => [
+                      ...prev,
+                      { id: newId, nome: requestedName },
+                    ]);
                     setSelectedCharacterId(newId);
+                    prevCharacterIdRef.current = newId;
+                    isSwitchingCharacterRef.current = true;
+                    resetCharacterDraftDefaults(requestedName);
+                    setTimeout(() => {
+                      isSwitchingCharacterRef.current = false;
+                    }, 0);
                     setPreMissionReady(true);
-                    setSetupComplete(false);
                   }}
                   style={{ ...styles.btnStep, borderColor: colors.brand, color: colors.brand }}
                 >
@@ -7854,6 +7916,7 @@ function AppContent() {
                   </div>
                   <button
                     onClick={async () => {
+                      if (alreadyJoinedCombat) return;
                       const activeName = getActiveCharacterName();
                       await emitCombatFlow("JOIN", {
                         userId: user.id,
@@ -7872,9 +7935,12 @@ function AppContent() {
                       width: "100%",
                       borderColor: colors.brand,
                       color: colors.brand,
+                      opacity: alreadyJoinedCombat ? 0.5 : 1,
+                      cursor: alreadyJoinedCombat ? "not-allowed" : "pointer",
                     }}
+                    disabled={alreadyJoinedCombat}
                   >
-                    Entrar no combate
+                    {alreadyJoinedCombat ? "Você já entrou no combate" : "Entrar no combate"}
                   </button>
                 </div>
 
