@@ -4068,6 +4068,73 @@ function StatusControl({ label, current, max, setCurrent, color }) {
   );
 }
 
+function TabGlyph({ tab, active }) {
+  const stroke = active ? "#00e5ff" : "#3a3f46";
+  const glow = active ? "drop-shadow(0 0 6px rgba(0,229,255,0.55))" : "none";
+  const common = {
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke,
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: { filter: glow, transition: "all .2s ease" },
+  };
+
+  if (tab === "status") {
+    return (
+      <svg {...common}>
+        <polygon points="12 2.5 21.5 12 12 21.5 2.5 12 12 2.5" />
+        <line x1="12" y1="7.5" x2="12" y2="16.5" />
+        <line x1="7.5" y1="12" x2="16.5" y2="12" />
+      </svg>
+    );
+  }
+  if (tab === "classe") {
+    return (
+      <svg {...common}>
+        <path d="M12 3.5 20 8v8l-8 4.5L4 16V8L12 3.5Z" />
+        <path d="M8.5 10.5h7M8.5 13.5h7" />
+      </svg>
+    );
+  }
+  if (tab === "pericias") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="4" width="6" height="6" />
+        <rect x="14" y="4" width="6" height="6" />
+        <rect x="4" y="14" width="6" height="6" />
+        <rect x="14" y="14" width="6" height="6" />
+      </svg>
+    );
+  }
+  if (tab === "rituais") {
+    return (
+      <svg {...common}>
+        <path d="M12 2.8v18.4M2.8 12h18.4" />
+        <path d="m5.1 5.1 13.8 13.8M18.9 5.1 5.1 18.9" />
+      </svg>
+    );
+  }
+  if (tab === "inventario") {
+    return (
+      <svg {...common}>
+        <rect x="5" y="7" width="14" height="14" rx="2.5" />
+        <path d="M9 7V5.8A2.2 2.2 0 0 1 11.2 3.6h1.6A2.2 2.2 0 0 1 15 5.8V7" />
+        <line x1="9" y1="12.5" x2="15" y2="12.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M4 6h8l-2 4H2l2-4Zm8 8h8l-2 4h-8l2-4Z" />
+      <path d="M9 10 7 14M17 10l2-4" />
+    </svg>
+  );
+}
+
 function AppContent() {
   const { signOut, role, user } = useAuth();
   const isDM = role === "adm";
@@ -6177,7 +6244,7 @@ function AppContent() {
           }}
           title="Bio-Monitor"
         >
-          ◈
+          <TabGlyph tab="status" active={activeTab === "status"} />
         </button>
         <button
           onClick={() => setActiveTab("classe")}
@@ -6188,7 +6255,7 @@ function AppContent() {
           }}
           title="Arquétipo"
         >
-          ◬
+          <TabGlyph tab="classe" active={activeTab === "classe"} />
         </button>
         <button
           onClick={() => setActiveTab("pericias")}
@@ -6199,7 +6266,7 @@ function AppContent() {
           }}
           title="Perícias"
         >
-          ⌘
+          <TabGlyph tab="pericias" active={activeTab === "pericias"} />
         </button>
         <button
           onClick={() => setActiveTab("rituais")}
@@ -6210,7 +6277,7 @@ function AppContent() {
           }}
           title="Rituais"
         >
-          ✧
+          <TabGlyph tab="rituais" active={activeTab === "rituais"} />
         </button>
         <button
           onClick={() => setActiveTab("inventario")}
@@ -6221,7 +6288,7 @@ function AppContent() {
           }}
           title="Inventário"
         >
-          🎒
+          <TabGlyph tab="inventario" active={activeTab === "inventario"} />
         </button>
         <button
           onClick={() => setActiveTab("combate")}
@@ -6232,7 +6299,7 @@ function AppContent() {
           }}
           title="Mesa de Combate"
         >
-          ⚔️
+          <TabGlyph tab="combate" active={activeTab === "combate"} />
         </button>
       </nav>
 
