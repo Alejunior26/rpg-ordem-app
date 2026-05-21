@@ -4195,6 +4195,7 @@ function AppContent() {
   const prevNexRef = useRef(5);
   const isInitialMount = useRef(true);
   const isSwitchingCharacterRef = useRef(false);
+  const prevCharacterIdRef = useRef("");
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
   const visibleCombatLogs = useMemo(
@@ -4470,6 +4471,8 @@ function AppContent() {
 
   useEffect(() => {
     if (!selectedCharacterId || !preMissionReady) return;
+    if (prevCharacterIdRef.current === selectedCharacterId) return;
+    prevCharacterIdRef.current = selectedCharacterId;
     const snapshot = characterSheets[selectedCharacterId];
     if (!snapshot) return;
     isSwitchingCharacterRef.current = true;
@@ -4477,7 +4480,7 @@ function AppContent() {
     setTimeout(() => {
       isSwitchingCharacterRef.current = false;
     }, 0);
-  }, [selectedCharacterId, preMissionReady, characterSheets]);
+  }, [selectedCharacterId, preMissionReady]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
