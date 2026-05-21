@@ -4861,17 +4861,18 @@ function AppContent() {
           onClick={signOut}
           style={{
             position: "fixed",
-            top: "20px",
-            right: "20px",
+            top: isMobile ? "10px" : "20px",
+            right: isMobile ? "10px" : "20px",
             zIndex: 9999,
             background: "#ff1744",
             color: "#fff",
             border: "none",
-            padding: "10px 14px",
+            padding: isMobile ? "8px 12px" : "10px 14px",
             borderRadius: "8px",
             cursor: "pointer",
             fontFamily: "inherit",
             fontWeight: "bold",
+            fontSize: isMobile ? "12px" : "14px",
             boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
           }}
         >
@@ -4882,7 +4883,7 @@ function AppContent() {
             width: "100%",
             maxWidth: "900px",
             margin: "0 auto",
-            padding: "40px 20px",
+            padding: isMobile ? "72px 12px 20px" : "40px 20px",
           }}
         >
           <div style={{ ...styles.summaryCard, marginBottom: "14px" }}>
@@ -4906,7 +4907,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 1/4 · ORIGEM
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1.1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {Object.keys(originsData).map((item) => (
                     <button
@@ -4975,7 +4982,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 2/4 · CLASSE
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {["Combatente", "Especialista", "Ocultista"].map((c) => (
                     <button
@@ -5072,7 +5085,13 @@ function AppContent() {
               <div style={{ ...styles.attrLabel, marginBottom: "10px" }}>
                 ETAPA 3/4 · TRILHA
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignContent: "flex-start" }}>
                   {trilhasDisponiveis.map((t) => (
                     <button
@@ -5180,17 +5199,18 @@ function AppContent() {
         onClick={signOut}
         style={{
           position: "fixed",
-          top: "20px",
-          right: "20px",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "10px" : "20px",
           zIndex: 9999,
           background: "#ff1744",
           color: "#fff",
           border: "none",
-          padding: "10px 14px",
+          padding: isMobile ? "8px 12px" : "10px 14px",
           borderRadius: "8px",
           cursor: "pointer",
           fontFamily: "inherit",
           fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
           boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
         }}
       >
@@ -5200,17 +5220,18 @@ function AppContent() {
         onClick={restartCharacterSetup}
         style={{
           position: "fixed",
-          top: "20px",
-          right: "92px",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "88px" : "92px",
           zIndex: 9999,
           background: "#1a1b22",
           color: colors.brand,
           border: `1px solid ${colors.brand}66`,
-          padding: "10px 12px",
+          padding: isMobile ? "8px 10px" : "10px 12px",
           borderRadius: "8px",
           cursor: "pointer",
           fontFamily: "inherit",
           fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
         }}
       >
         Recomeçar
@@ -5592,6 +5613,7 @@ function AppContent() {
           onClick={() => setActiveTab("status")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "status" ? colors.brand : "#333",
           }}
           title="Bio-Monitor"
@@ -5602,6 +5624,7 @@ function AppContent() {
           onClick={() => setActiveTab("classe")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "classe" ? colors.brand : "#333",
           }}
           title="Arquétipo"
@@ -5612,6 +5635,7 @@ function AppContent() {
           onClick={() => setActiveTab("pericias")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "pericias" ? colors.brand : "#333",
           }}
           title="Perícias"
@@ -5622,6 +5646,7 @@ function AppContent() {
           onClick={() => setActiveTab("rituais")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "rituais" ? colors.brand : "#333",
           }}
           title="Rituais"
@@ -5632,6 +5657,7 @@ function AppContent() {
           onClick={() => setActiveTab("inventario")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "inventario" ? colors.brand : "#333",
           }}
           title="Inventário"
@@ -5642,6 +5668,7 @@ function AppContent() {
           onClick={() => setActiveTab("combate")}
           style={{
             ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
             color: activeTab === "combate" ? colors.brand : "#333",
           }}
           title="Mesa de Combate"
@@ -5665,7 +5692,8 @@ function AppContent() {
               <h2
                 style={{
                   color: colors.brand,
-                  letterSpacing: "5px",
+                  letterSpacing: isMobile ? "2px" : "5px",
+                  fontSize: isMobile ? "24px" : "30px",
                   margin: 0,
                   textShadow: colors.glow,
                 }}
@@ -6712,7 +6740,7 @@ function AppContent() {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    minWidth: "760px",
+                    minWidth: isMobile ? "620px" : "760px",
                   }}
                 >
                   <thead>
@@ -7288,9 +7316,9 @@ function AppContent() {
                 style={{
                   ...styles.statusBox,
                   flex: 1,
-                  minWidth: "300px",
+                  minWidth: isMobile ? "0" : "300px",
                   textAlign: "center",
-                  padding: "40px",
+                  padding: isMobile ? "20px" : "40px",
                 }}
               >
                 <h2
@@ -7386,7 +7414,7 @@ function AppContent() {
                 style={{
                   ...styles.statusBox,
                   flex: 2,
-                  minWidth: "300px",
+                  minWidth: isMobile ? "0" : "300px",
                   padding: "24px",
                 }}
               >
