@@ -58,6 +58,13 @@ const colors = {
   glow: "0 0 10px rgba(0, 229, 255, 0.4)",
 };
 
+const MISSIONS_CATALOG = [
+  "Operação Aurora",
+  "Rastro no Outro Lado",
+  "Confinamento 19",
+  "Eco de Sangue",
+];
+
 const rulesByClass = {
   Combatente: {
     pvBase: 20,
@@ -4102,6 +4109,17 @@ function AppContent() {
   const [rodadaAtual, setRodadaAtual] = useState(1);
   const [combatLogs, setCombatLogs] = useState([]);
   const [aliadosCampanha, setAliadosCampanha] = useState([]);
+  const [combatParticipants, setCombatParticipants] = useState([]);
+  const [turnOrder, setTurnOrder] = useState([]);
+  const [turnIndex, setTurnIndex] = useState(0);
+  const [turnDoneBy, setTurnDoneBy] = useState([]);
+  const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
+  const [selectedMission, setSelectedMission] = useState("");
+  const [playerCharacters, setPlayerCharacters] = useState([
+    { id: `char-${Date.now()}`, nome: "" },
+  ]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const [preMissionReady, setPreMissionReady] = useState(false);
 
   const [rituaisSelecionados, setRituaisSelecionados] = useState([]);
   const [alvosRituais, setAlvosRituais] = useState({});
@@ -4182,6 +4200,80 @@ function AppContent() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  function getActiveCharacterName() {
+    const selected = playerCharacters.find((c) => c.id === selectedCharacterId);
+    if (selected?.nome?.trim()) return selected.nome.trim();
+    if (nomePersonagem?.trim()) return nomePersonagem.trim();
+    return user.email.split("@")[0];
+  }
+
+  function parseFlowEvents(logs) {
+    const events = [];
+    for (const log of [...logs].reverse()) {
+      if (!log?.acao || typeof log.acao !== "string") continue;
+      if (!log.acao.startsWith("[FLOW]")) continue;
+      const raw = log.acao.slice(6);
+      try {
+        const event = JSON.parse(raw);
+        events.push(event);
+      } catch {
+        // ignora evento inválido
+      }
+    }
+    return events;
+  }
+
+  function computeCombatFlow(logs, currentRound) {
+    const joinedByUser = new Map();
+    let order = [];
+    let done = [];
+    let idx = 0;
+
+    for (const event of parseFlowEvents(logs)) {
+      if (event?.event === "JOIN" && event?.payload?.userId) {
+        joinedByUser.set(event.payload.userId, {
+          userId: event.payload.userId,
+          nome: event.payload.nome || "Sem nome",
+        });
+      }
+      if (event?.event === "SET_ORDER" && Array.isArray(event?.payload?.order)) {
+        order = event.payload.order;
+        idx = 0;
+        done = [];
+      }
+      if (
+        event?.event === "TURN_DONE" &&
+        event?.payload?.userId &&
+        Number(event?.payload?.round) === Number(currentRound)
+      ) {
+        if (!done.includes(event.payload.userId)) done.push(event.payload.userId);
+        if (order[idx] === event.payload.userId) {
+          idx = Math.min(idx + 1, Math.max(order.length - 1, 0));
+        }
+      }
+      if (
+        event?.event === "ROUND_RESET" &&
+        Number(event?.payload?.round) === Number(currentRound)
+      ) {
+        idx = 0;
+        done = [];
+      }
+    }
+
+    const participants = [...joinedByUser.values()];
+    return { participants, order, done, idx };
+  }
+
+  async function emitCombatFlow(event, payload) {
+    await supabase.from("combat_log").insert([
+      {
+        personagem: "SISTEMA FLOW",
+        acao: `[FLOW]${JSON.stringify({ event, payload, at: Date.now() })}`,
+        rodada: rodadaAtual,
+      },
+    ]);
+  }
 
   // ==========================================
   // 2. CÁLCULOS E DERIVAÇÕES (Agora é seguro usar as variáveis!)
@@ -4265,6 +4357,18 @@ function AppContent() {
     if (canUseCursedItems) return;
     if (maldicoesSelecionadas.length > 0) setMaldicoesSelecionadas([]);
   }, [canUseCursedItems, maldicoesSelecionadas]);
+
+  useEffect(() => {
+    if (!selectedCharacterId && playerCharacters.length > 0) {
+      setSelectedCharacterId(playerCharacters[0].id);
+    }
+  }, [selectedCharacterId, playerCharacters]);
+
+  useEffect(() => {
+    if (!selectedMission || !selectedCharacterId) {
+      setPreMissionReady(false);
+    }
+  }, [selectedMission, selectedCharacterId]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
@@ -4354,11 +4458,44 @@ function AppContent() {
     };
   }, [user]);
 
+  useEffect(() => {
+    const flow = computeCombatFlow(combatLogs, rodadaAtual);
+    setCombatParticipants(flow.participants);
+    setTurnOrder(flow.order);
+    setTurnDoneBy(flow.done);
+    setTurnIndex(flow.idx);
+  }, [combatLogs, rodadaAtual]);
+
+  useEffect(() => {
+    if (turnOrder.length > 0) {
+      setSelectedOrderDraft(turnOrder);
+      return;
+    }
+    setSelectedOrderDraft((prev) => {
+      if (prev.length > 0) return prev;
+      return combatParticipants.map((p) => p.userId);
+    });
+  }, [turnOrder, combatParticipants]);
+
   // Função exclusiva do Mestre
   const avancarRodada = async () => {
+    if (!isDM) return;
+    if (!turnOrder.length) {
+      alert("Defina a ordem do turno antes de avançar rodada.");
+      return;
+    }
+    const pendentes = turnOrder.filter((id) => !turnDoneBy.includes(id));
+    if (pendentes.length > 0) {
+      const nomesPendentes = pendentes
+        .map((id) => combatParticipants.find((p) => p.userId === id)?.nome || id)
+        .join(", ");
+      alert(`Ainda faltam agir nesta rodada: ${nomesPendentes}`);
+      return;
+    }
     const prox = rodadaAtual + 1;
     setRodadaAtual(prox);
     await supabase.from("combat_state").update({ rodada: prox }).eq("id", 1);
+    await emitCombatFlow("ROUND_RESET", { round: prox });
     await supabase.from("combat_log").insert([
       {
         personagem: "SISTEMA A.S.A.",
@@ -4387,6 +4524,13 @@ function AppContent() {
         const myProfile = data.find((p) => p.id === user.id);
         if (myProfile?.nome_personagem) {
           setNomePersonagem(myProfile.nome_personagem);
+          setPlayerCharacters((prev) => {
+            if (prev.some((c) => c.nome === myProfile.nome_personagem)) return prev;
+            return [
+              ...prev,
+              { id: `char-${Date.now()}-main`, nome: myProfile.nome_personagem },
+            ];
+          });
         }
       }
     }
@@ -4774,6 +4918,10 @@ function AppContent() {
       inventario,
       originLocked,
       setupComplete,
+      selectedMission,
+      playerCharacters,
+      selectedCharacterId,
+      preMissionReady,
     };
     localStorage.setItem(storageKey, JSON.stringify(payload));
   }, [
@@ -4797,6 +4945,10 @@ function AppContent() {
     inventario,
     originLocked,
     setupComplete,
+    selectedMission,
+    playerCharacters,
+    selectedCharacterId,
+    preMissionReady,
     storageKey,
     user.id,
     user.email,
@@ -4849,10 +5001,123 @@ function AppContent() {
       // 👈 CARREGANDO INVENTÁRIO
       if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
       if (Array.isArray(data.inventario)) setInventario(data.inventario);
+      if (typeof data.selectedMission === "string")
+        setSelectedMission(data.selectedMission);
+      if (Array.isArray(data.playerCharacters) && data.playerCharacters.length) {
+        setPlayerCharacters(data.playerCharacters);
+      }
+      if (typeof data.selectedCharacterId === "string")
+        setSelectedCharacterId(data.selectedCharacterId);
+      if (typeof data.preMissionReady === "boolean")
+        setPreMissionReady(data.preMissionReady);
     } catch {
       /* erro silencioso */
     }
   }, [storageKey, user.id]);
+
+  if (!preMissionReady) {
+    const selectedChar = playerCharacters.find((c) => c.id === selectedCharacterId);
+    return (
+      <div style={styles.body}>
+        <div style={{ ...styles.container, maxWidth: "760px" }}>
+          <div style={styles.statusBox}>
+            <h2 style={styles.sectionTitle}>PRÉ-MISSÃO</h2>
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>MISSÃO</div>
+              <select
+                value={selectedMission}
+                onChange={(e) => setSelectedMission(e.target.value)}
+                style={styles.selectField}
+              >
+                <option value="">Selecione a missão</option>
+                {MISSIONS_CATALOG.map((mission) => (
+                  <option key={mission} value={mission}>
+                    {mission}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>
+                PERSONAGENS DO AGENTE
+              </div>
+              <div style={{ display: "grid", gap: "8px" }}>
+                {playerCharacters.map((character) => (
+                  <div key={character.id} style={{ display: "flex", gap: "8px" }}>
+                    <input
+                      value={character.nome}
+                      onChange={(e) =>
+                        setPlayerCharacters((prev) =>
+                          prev.map((c) =>
+                            c.id === character.id ? { ...c, nome: e.target.value } : c
+                          )
+                        )
+                      }
+                      placeholder="Nome do personagem"
+                      style={{ ...styles.selectField, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCharacterId(character.id)}
+                      style={{
+                        ...styles.btnStep,
+                        borderColor:
+                          selectedCharacterId === character.id ? colors.brand : "#333",
+                        color: selectedCharacterId === character.id ? colors.brand : "#888",
+                        minWidth: "92px",
+                      }}
+                    >
+                      Selecionar
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setPlayerCharacters((prev) => [
+                    ...prev,
+                    { id: `char-${Date.now()}-${prev.length}`, nome: "" },
+                  ])
+                }
+                style={{ ...styles.btnStep, marginTop: "10px" }}
+              >
+                + Novo personagem
+              </button>
+            </div>
+            <button
+              onClick={async () => {
+                if (!selectedMission) {
+                  alert("Escolha a missão para continuar.");
+                  return;
+                }
+                if (!selectedChar?.nome?.trim()) {
+                  alert("Selecione um personagem com nome.");
+                  return;
+                }
+                setNomePersonagem(selectedChar.nome.trim());
+                await supabase
+                  .from("profiles")
+                  .update({ nome_personagem: selectedChar.nome.trim() })
+                  .eq("id", user.id);
+                setPreMissionReady(true);
+              }}
+              style={{
+                ...styles.btnStep,
+                width: "100%",
+                marginTop: "8px",
+                borderColor: colors.brand,
+                color: colors.brand,
+                fontWeight: "bold",
+              }}
+            >
+              Confirmar missão e personagem
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!setupComplete) {
     return (
@@ -7339,6 +7604,161 @@ function AppContent() {
                 >
                   Sincronização em tempo real
                 </p>
+
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: "10px",
+                    padding: "10px",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                    MISSÃO ATIVA
+                  </div>
+                  <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "10px" }}>
+                    {selectedMission || "Sem missão selecionada"}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const activeName = getActiveCharacterName();
+                      await emitCombatFlow("JOIN", {
+                        userId: user.id,
+                        nome: activeName,
+                      });
+                      await supabase.from("combat_log").insert([
+                        {
+                          personagem: activeName,
+                          acao: "Entrou no combate.",
+                          rodada: rodadaAtual,
+                        },
+                      ]);
+                    }}
+                    style={{
+                      ...styles.btnStep,
+                      width: "100%",
+                      borderColor: colors.brand,
+                      color: colors.brand,
+                    }}
+                  >
+                    Entrar no combate
+                  </button>
+                </div>
+
+                {!!turnOrder.length && (
+                  <div
+                    style={{
+                      marginBottom: "16px",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "10px",
+                      padding: "10px",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                      TURNO ATUAL
+                    </div>
+                    <div style={{ color: colors.brand, fontWeight: "bold", marginBottom: "8px" }}>
+                      {combatParticipants.find((p) => p.userId === turnOrder[turnIndex])?.nome ||
+                        "Aguardando ordem"}
+                    </div>
+                    {!isDM && turnOrder[turnIndex] === user.id && (
+                      <button
+                        onClick={async () => {
+                          if (turnDoneBy.includes(user.id)) return;
+                          await emitCombatFlow("TURN_DONE", {
+                            userId: user.id,
+                            round: rodadaAtual,
+                          });
+                          await supabase.from("combat_log").insert([
+                            {
+                              personagem: getActiveCharacterName(),
+                              acao: "Finalizou o turno.",
+                              rodada: rodadaAtual,
+                            },
+                          ]);
+                        }}
+                        style={{
+                          ...styles.btnStep,
+                          width: "100%",
+                          borderColor: "#22c55e",
+                          color: "#22c55e",
+                        }}
+                      >
+                        Finalizar meu turno
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {isDM && (
+                  <div
+                    style={{
+                      marginBottom: "20px",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "10px",
+                      padding: "10px",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                      ORDEM DE TURNO (MESTRE)
+                    </div>
+                    <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
+                      {combatParticipants.map((p) => (
+                        <label
+                          key={p.userId}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            color: "#d1d5db",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderDraft.includes(p.userId)}
+                            onChange={() =>
+                              setSelectedOrderDraft((prev) =>
+                                prev.includes(p.userId)
+                                  ? prev.filter((id) => id !== p.userId)
+                                  : [...prev, p.userId]
+                              )
+                            }
+                          />
+                          {p.nome}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!selectedOrderDraft.length) {
+                          alert("Selecione ao menos 1 participante.");
+                          return;
+                        }
+                        await emitCombatFlow("SET_ORDER", {
+                          order: selectedOrderDraft,
+                        });
+                        await supabase.from("combat_log").insert([
+                          {
+                            personagem: "SISTEMA A.S.A.",
+                            acao: `Ordem definida pelo mestre (${selectedOrderDraft.length} participantes).`,
+                            rodada: rodadaAtual,
+                          },
+                        ]);
+                      }}
+                      style={{
+                        ...styles.btnStep,
+                        width: "100%",
+                        borderColor: colors.brand,
+                        color: colors.brand,
+                      }}
+                    >
+                      Definir ordem selecionada
+                    </button>
+                  </div>
+                )}
 
                 <div
                   style={{
