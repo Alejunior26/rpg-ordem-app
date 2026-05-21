@@ -7,6 +7,9 @@ const DEV_ADMIN_USER = {
   id: "local-dev-admin",
   email: "admin@local.dev",
 };
+const AUTH_REDIRECT_URL =
+  process.env.REACT_APP_AUTH_REDIRECT_URL || window.location.origin;
+const SIGNUP_CONFIRM_REDIRECT = `${AUTH_REDIRECT_URL}?auth=confirmed`;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -101,7 +104,13 @@ export function AuthProvider({ children }) {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: SIGNUP_CONFIRM_REDIRECT,
+      },
+    });
     // Se não houver sessão imediata (ex.: confirmação por e-mail),
     // evitamos travar a UI em loading.
     if (error || !data?.session) setLoading(false);
@@ -140,7 +149,7 @@ export function AuthProvider({ children }) {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: AUTH_REDIRECT_URL,
       });
       return { error };
     } catch (error) {

@@ -20,7 +20,16 @@ export default function LoginPage() {
     }
 
     const { error } = await signIn(email, password);
-    if (error) alert(error.message);
+    if (error) {
+      const message = String(error?.message || "").toLowerCase();
+      if (message.includes("email not confirmed")) {
+        alert(
+          "Seu e-mail ainda nao foi confirmado. Abra o link enviado no e-mail antes de fazer login."
+        );
+        return;
+      }
+      alert(error.message);
+    }
   }
 
   async function handleRegister() {
@@ -44,7 +53,9 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
-      alert("Conta criada! Agora faça login.");
+      alert(
+        "Conta criada. Enviamos um e-mail de confirmacao. Confirme seu e-mail e depois faca login."
+      );
       setMode("login");
       setPassword("");
       setConfirmPassword("");
