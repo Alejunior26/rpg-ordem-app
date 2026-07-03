@@ -11,15 +11,22 @@ const AUTH_REDIRECT_URL =
   process.env.REACT_APP_AUTH_REDIRECT_URL || window.location.origin;
 const SIGNUP_CONFIRM_REDIRECT = `${AUTH_REDIRECT_URL}?auth=confirmed`;
 
+function normalizeRole(value) {
+  if (value === "adm") return "admin";
+  if (value === "jogador") return "player";
+  if (value === "dm" || value === "admin" || value === "player") return value;
+  return "player";
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState("jogador"); // Já começa com fallback seguro
+  const [role, setRole] = useState("player"); // Ja comeca com fallback seguro
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (AUTH_BYPASS_ENABLED) {
       setUser(DEV_ADMIN_USER);
-      setRole("adm");
+      setRole("admin");
       setLoading(false);
       console.warn("AUTH BYPASS ativo: login remoto desabilitado em desenvolvimento.");
       return;
@@ -28,7 +35,7 @@ export function AuthProvider({ children }) {
     // 🔄 Função centralizada: busca o perfil e TEM que desligar o loading
     const fetchProfileAndStopLoading = async (currentUser) => {
       if (!currentUser) {
-        setRole("jogador");
+        setRole("player");
         setLoading(false);
         return;
       }
@@ -44,7 +51,7 @@ export function AuthProvider({ children }) {
           console.warn("Aviso ao buscar perfil (pode ignorar):", error.message);
         }
 
-        setRole(data?.role || "jogador");
+        setRole(normalizeRole(data?.role));
       } catch (err) {
         console.error("Erro inesperado:", err);
       } finally {
@@ -80,7 +87,7 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     if (AUTH_BYPASS_ENABLED) {
       setUser(DEV_ADMIN_USER);
-      setRole("adm");
+      setRole("admin");
       setLoading(false);
       return { data: { user: DEV_ADMIN_USER }, error: null };
     }
@@ -98,7 +105,7 @@ export function AuthProvider({ children }) {
   async function signUp(email, password) {
     if (AUTH_BYPASS_ENABLED) {
       setUser(DEV_ADMIN_USER);
-      setRole("adm");
+      setRole("admin");
       setLoading(false);
       return { data: { user: DEV_ADMIN_USER, session: null }, error: null };
     }
@@ -121,7 +128,7 @@ export function AuthProvider({ children }) {
   async function signOut() {
     if (AUTH_BYPASS_ENABLED) {
       setUser(DEV_ADMIN_USER);
-      setRole("adm");
+      setRole("admin");
       setLoading(false);
       return { error: null };
     }
@@ -130,7 +137,7 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.signOut();
     if (!error) {
       setUser(null);
-      setRole("jogador");
+      setRole("player");
     }
     setLoading(false);
     return { error };

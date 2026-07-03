@@ -39,11 +39,22 @@ Isso permite que a tela de combate e os personagens atualizem em tempo real.
 
 ## 4. Confirmar quem é mestre
 
-O app usa `profiles.role` para saber quem é mestre. Rode isto trocando o e-mail:
+O app usa `profiles.role` para saber quem é jogador, mestre ou admin. Os valores oficiais são:
+
+- `player`: jogador comum.
+- `dm`: mestre, vê painel e personagens.
+- `admin`: administrador, vê painel e pode trocar roles.
+
+Depois de rodar `docs/admin-panel-sql.sql`, valores antigos são migrados automaticamente:
+
+- `jogador` vira `player`.
+- `adm` vira `admin`.
+
+Para definir o seu usuário como admin, rode isto trocando o e-mail:
 
 ```sql
 update profiles
-set role = 'adm'
+set role = 'admin'
 where email = 'SEU_EMAIL_AQUI';
 ```
 
@@ -51,9 +62,19 @@ Jogadores normais devem ficar com:
 
 ```sql
 update profiles
-set role = 'jogador'
+set role = 'player'
 where email = 'EMAIL_DO_JOGADOR';
 ```
+
+Mestres que não devem trocar roles ficam com:
+
+```sql
+update profiles
+set role = 'dm'
+where email = 'EMAIL_DO_MESTRE';
+```
+
+Importante: players nao devem atualizar `profiles.role` diretamente pelo app. O arquivo `docs/admin-panel-sql.sql` cria a funcao segura `admin_update_profile_role`, usada pelo painel admin para trocar roles sem abrir update de role para qualquer jogador.
 
 ## 5. Criar missão inicial
 
