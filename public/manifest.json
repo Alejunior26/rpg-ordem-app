@@ -1,0 +1,17 @@
+{
+  "short_name": "RPG Ordem",
+  "name": "RPG Ordem",
+  "description": "Fichas, personagens e ferramentas de campanha.",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#050507",
+  "background_color": "#050507",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
