@@ -65,6 +65,13 @@ const MISSIONS_CATALOG = [
   "Eco de Sangue",
 ];
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value) {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
 const rulesByClass = {
   Combatente: {
     pvBase: 20,
@@ -4183,12 +4190,17 @@ function AppContent() {
   const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
   const [npcNameInput, setNpcNameInput] = useState("");
   const [selectedMission, setSelectedMission] = useState("");
+  const [missions, setMissions] = useState([]);
+  const [remoteCharactersReady, setRemoteCharactersReady] = useState(false);
   const [playerCharacters, setPlayerCharacters] = useState([
     { id: `char-${Date.now()}`, nome: "" },
   ]);
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
   const [preMissionReady, setPreMissionReady] = useState(false);
   const [characterSheets, setCharacterSheets] = useState({});
+  const [adminProfiles, setAdminProfiles] = useState([]);
+  const [adminCharacters, setAdminCharacters] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   const [rituaisSelecionados, setRituaisSelecionados] = useState([]);
   const [alvosRituais, setAlvosRituais] = useState({});
@@ -4282,6 +4294,15 @@ function AppContent() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    loadRemoteCampaignData();
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab === "admin") loadAdminPanelData();
+  }, [activeTab, isDM]);
 
   function getActiveCharacterName() {
     const selected = playerCharacters.find((c) => c.id === selectedCharacterId);
@@ -4377,6 +4398,119 @@ function AppContent() {
     setVersoesRituais({});
     setPrestigio(0);
     setInventario([]);
+  }
+
+  async function createRemoteCharacter(characterName, missionName = selectedMission) {
+    const cleanName = characterName?.trim();
+    if (!cleanName) return null;
+    const mission = missions.find((item) => item.name === missionName);
+    const { data, error } = await supabase
+      .from("characters")
+      .insert([
+        {
+          owner_id: user.id,
+          mission_id: mission?.id || null,
+          name: cleanName,
+          sheet_json: { ...buildCharacterSnapshot(), nomePersonagem: cleanName },
+        },
+      ])
+      .select("id, name, mission_id, sheet_json, owner_id")
+      .single();
+
+    if (error) {
+      console.warn("Falha ao criar personagem no Supabase:", error.message);
+      return null;
+    }
+
+    setPlayerCharacters((prev) => [
+      ...prev.filter((item) => item.id !== data.id),
+      { id: data.id, nome: data.name, missionId: data.mission_id, remote: true },
+    ]);
+    setCharacterSheets((prev) => ({ ...prev, [data.id]: data.sheet_json || {} }));
+    return data;
+  }
+
+  async function persistSelectedCharacterSheet(snapshot = buildCharacterSnapshot()) {
+    if (!selectedCharacterId || !isUuid(selectedCharacterId)) return;
+    const { error } = await supabase
+      .from("characters")
+      .update({
+        name: snapshot.nomePersonagem || getActiveCharacterName(),
+        sheet_json: snapshot,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedCharacterId);
+
+    if (error) console.warn("Falha ao salvar personagem:", error.message);
+  }
+
+  async function loadRemoteCampaignData() {
+    const { data: missionRows, error: missionError } = await supabase
+      .from("missions")
+      .select("id, name, description")
+      .order("created_at", { ascending: true });
+
+    if (!missionError && missionRows?.length) {
+      setMissions(missionRows);
+      setSelectedMission((prev) => prev || missionRows[0].name);
+    } else {
+      setMissions(MISSIONS_CATALOG.map((name) => ({ id: name, name })));
+    }
+
+    const { data: characterRows, error: characterError } = await supabase
+      .from("characters")
+      .select("id, name, mission_id, sheet_json, owner_id")
+      .order("updated_at", { ascending: false });
+
+    if (!characterError && Array.isArray(characterRows)) {
+      const nextCharacters = characterRows.map((item) => ({
+        id: item.id,
+        nome: item.name,
+        missionId: item.mission_id,
+        remote: true,
+      }));
+      const nextSheets = {};
+      characterRows.forEach((item) => {
+        nextSheets[item.id] = item.sheet_json || {};
+      });
+
+      if (nextCharacters.length > 0) {
+        setPlayerCharacters(nextCharacters);
+        setCharacterSheets(nextSheets);
+        setSelectedCharacterId((prev) => prev || nextCharacters[0].id);
+      }
+      setRemoteCharactersReady(true);
+    } else {
+      setRemoteCharactersReady(true);
+    }
+  }
+
+  async function loadAdminPanelData() {
+    if (!isDM) return;
+    setAdminLoading(true);
+    const [{ data: profiles }, { data: characters }] = await Promise.all([
+      supabase.from("profiles").select("id, email, role, nome_personagem").order("email"),
+      supabase
+        .from("characters")
+        .select("id, owner_id, name, mission_id, sheet_json, updated_at")
+        .order("updated_at", { ascending: false }),
+    ]);
+    setAdminProfiles(profiles || []);
+    setAdminCharacters(characters || []);
+    setAdminLoading(false);
+  }
+
+  async function updateProfileRole(profileId, nextRole) {
+    if (!isDM) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: nextRole })
+      .eq("id", profileId);
+    if (error) {
+      alert(`Falha ao atualizar role: ${error.message}`);
+      return;
+    }
+    loadAdminPanelData();
   }
 
   function parseFlowEvents(logs) {
@@ -4544,10 +4678,15 @@ function AppContent() {
   useEffect(() => {
     if (!selectedCharacterId || !preMissionReady) return;
     if (isSwitchingCharacterRef.current) return;
+    const snapshot = buildCharacterSnapshot();
     setCharacterSheets((prev) => ({
       ...prev,
-      [selectedCharacterId]: buildCharacterSnapshot(),
+      [selectedCharacterId]: snapshot,
     }));
+
+    if (!isUuid(selectedCharacterId)) return;
+    const timer = setTimeout(() => persistSelectedCharacterSheet(snapshot), 700);
+    return () => clearTimeout(timer);
   }, [
     selectedCharacterId,
     preMissionReady,
@@ -4575,17 +4714,17 @@ function AppContent() {
   ]);
 
   useEffect(() => {
-    if (!selectedCharacterId || !preMissionReady) return;
+    if (!selectedCharacterId || !preMissionReady || !remoteCharactersReady) return;
     if (prevCharacterIdRef.current === selectedCharacterId) return;
-    prevCharacterIdRef.current = selectedCharacterId;
     const snapshot = characterSheets[selectedCharacterId];
+    prevCharacterIdRef.current = selectedCharacterId;
     if (!snapshot) return;
     isSwitchingCharacterRef.current = true;
     applyCharacterSnapshot(snapshot);
     setTimeout(() => {
       isSwitchingCharacterRef.current = false;
     }, 0);
-  }, [selectedCharacterId, preMissionReady]);
+  }, [selectedCharacterId, preMissionReady, remoteCharactersReady, characterSheets]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
@@ -5284,9 +5423,9 @@ function AppContent() {
                 style={styles.selectField}
               >
                 <option value="">Selecione a missão</option>
-                {MISSIONS_CATALOG.map((mission) => (
-                  <option key={mission} value={mission}>
-                    {mission}
+                {(missions.length ? missions : MISSIONS_CATALOG.map((name) => ({ id: name, name }))).map((mission) => (
+                  <option key={mission.id || mission.name} value={mission.name || mission}>
+                    {mission.name || mission}
                   </option>
                 ))}
               </select>
@@ -5325,7 +5464,7 @@ function AppContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (playerCharacters.length <= 1) {
                           alert("Você precisa manter ao menos 1 personagem.");
                           return;
@@ -5334,6 +5473,16 @@ function AppContent() {
                           `Excluir o personagem \"${character.nome || "sem nome"}\"?`
                         );
                         if (!canDelete) return;
+                        if (isUuid(character.id)) {
+                          const { error } = await supabase
+                            .from("characters")
+                            .delete()
+                            .eq("id", character.id);
+                          if (error) {
+                            alert(`Falha ao excluir personagem: ${error.message}`);
+                            return;
+                          }
+                        }
                         setPlayerCharacters((prev) =>
                           prev.filter((c) => c.id !== character.id)
                         );
@@ -5364,10 +5513,15 @@ function AppContent() {
               <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const requestedName = window.prompt("Nome do personagem:")?.trim();
                     if (!requestedName) {
                       alert("Você precisa informar um nome.");
+                      return;
+                    }
+                    const created = await createRemoteCharacter(requestedName);
+                    if (created) {
+                      setSelectedCharacterId(created.id);
                       return;
                     }
                     setPlayerCharacters((prev) => [
@@ -5381,7 +5535,7 @@ function AppContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const requestedName = window
                       .prompt("Nome do novo personagem:")
                       ?.trim();
@@ -5389,19 +5543,22 @@ function AppContent() {
                       alert("Você precisa informar um nome para criar personagem.");
                       return;
                     }
-                    const newId = `char-${Date.now()}-new`;
-                    setCharacterSheets((prev) => ({
-                      ...prev,
-                      [newId]: undefined,
-                    }));
-                    setPlayerCharacters((prev) => [
-                      ...prev,
-                      { id: newId, nome: requestedName },
-                    ]);
-                    setSelectedCharacterId(newId);
-                    prevCharacterIdRef.current = newId;
                     isSwitchingCharacterRef.current = true;
                     resetCharacterDraftDefaults(requestedName);
+                    const created = await createRemoteCharacter(requestedName);
+                    const newId = created?.id || `char-${Date.now()}-new`;
+                    if (!created) {
+                      setPlayerCharacters((prev) => [
+                        ...prev,
+                        { id: newId, nome: requestedName },
+                      ]);
+                    }
+                    setSelectedCharacterId(newId);
+                    prevCharacterIdRef.current = newId;
+                    setCharacterSheets((prev) => ({
+                      ...prev,
+                      [newId]: { ...buildCharacterSnapshot(), nomePersonagem: requestedName },
+                    }));
                     setTimeout(() => {
                       isSwitchingCharacterRef.current = false;
                     }, 0);
@@ -5424,10 +5581,19 @@ function AppContent() {
                   return;
                 }
                 const chosenName = selectedChar.nome.trim();
+                let nextCharacterId = selectedCharacterId;
+                if (!isUuid(nextCharacterId)) {
+                  const created = await createRemoteCharacter(chosenName);
+                  if (created?.id) {
+                    nextCharacterId = created.id;
+                    setSelectedCharacterId(created.id);
+                  }
+                }
                 setNomePersonagem(chosenName);
-                if (characterSheets[selectedCharacterId]) {
+                const snapshot = characterSheets[nextCharacterId];
+                if (snapshot) {
                   isSwitchingCharacterRef.current = true;
-                  applyCharacterSnapshot(characterSheets[selectedCharacterId]);
+                  applyCharacterSnapshot(snapshot);
                   setTimeout(() => {
                     isSwitchingCharacterRef.current = false;
                   }, 0);
@@ -6301,6 +6467,19 @@ function AppContent() {
         >
           <TabGlyph tab="combate" active={activeTab === "combate"} />
         </button>
+        {isDM && (
+          <button
+            onClick={() => setActiveTab("admin")}
+            style={{
+              ...styles.navBtn,
+              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+              color: activeTab === "admin" ? colors.brand : "#333",
+            }}
+            title="Admin"
+          >
+            <TabGlyph tab="classe" active={activeTab === "admin"} />
+          </button>
+        )}
       </nav>
 
       <main
@@ -9250,6 +9429,94 @@ function AppContent() {
             </div>
           </div>
         )}
+        {activeTab === "admin" && isDM && (
+          <div style={styles.container}>
+            <div style={styles.statusBox}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  marginBottom: "18px",
+                }}
+              >
+                <h2 style={styles.sectionTitle}>PAINEL_ADMIN</h2>
+                <button
+                  onClick={loadAdminPanelData}
+                  style={{ ...styles.btnStep, borderColor: colors.brand, color: colors.brand }}
+                >
+                  Atualizar
+                </button>
+              </div>
+
+              {adminLoading && (
+                <div style={{ color: colors.muted, marginBottom: "14px" }}>
+                  Carregando dados administrativos...
+                </div>
+              )}
+
+              <div style={{ ...styles.tabGrid, marginBottom: "18px" }}>
+                {adminProfiles.map((profile) => {
+                  const chars = adminCharacters.filter((c) => c.owner_id === profile.id);
+                  return (
+                    <div key={profile.id} style={styles.summaryCard}>
+                      <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "6px" }}>
+                        {(profile.nome_personagem || profile.email || "Sem nome").toUpperCase()}
+                      </div>
+                      <div style={{ color: colors.muted, fontSize: "12px", marginBottom: "10px" }}>
+                        {profile.email || profile.id}
+                      </div>
+                      <label style={{ display: "grid", gap: "6px", marginBottom: "12px" }}>
+                        <span style={styles.attrLabel}>ROLE</span>
+                        <select
+                          value={profile.role || "jogador"}
+                          onChange={(e) => updateProfileRole(profile.id, e.target.value)}
+                          style={styles.selectField}
+                        >
+                          <option value="jogador">jogador</option>
+                          <option value="adm">adm</option>
+                        </select>
+                      </label>
+                      <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>
+                        PERSONAGENS ({chars.length})
+                      </div>
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        {chars.length === 0 && (
+                          <div style={{ color: "#666", fontSize: "12px" }}>
+                            Nenhum personagem salvo no Supabase.
+                          </div>
+                        )}
+                        {chars.map((char) => {
+                          const sheet = char.sheet_json || {};
+                          return (
+                            <div
+                              key={char.id}
+                              style={{
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                borderRadius: "8px",
+                                padding: "10px",
+                                background: "rgba(0,0,0,0.28)",
+                              }}
+                            >
+                              <div style={{ color: colors.brand, fontWeight: "bold" }}>
+                                {char.name}
+                              </div>
+                              <div style={{ color: "#aaa", fontSize: "12px", lineHeight: 1.6 }}>
+                                NEX {sheet.nex || 5}% | {sheet.classe || "Classe indefinida"} | {sheet.trilha || "Trilha indefinida"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
         {infoModal && (
           <div
             onClick={() => setInfoModal(null)}
@@ -9490,3 +9757,16 @@ export default function App() {
 
   return <AppContent key={user.id} />;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
