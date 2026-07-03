@@ -4311,6 +4311,38 @@ function AppContent() {
     return user.email.split("@")[0];
   }
 
+  function createInitialCharacterSnapshot(characterName = "") {
+    return {
+      nomePersonagem: characterName,
+      nex: 5,
+      deslocamento: 9,
+      defArmadura: 0,
+      defOutros: 0,
+      origin: "Acadêmico",
+      originLocked: false,
+      setupComplete: false,
+      attrs: {
+        FOR: 1,
+        AGI: 2,
+        INT: 2,
+        VIG: 2,
+        PRE: 2,
+      },
+      pvAtual: 20,
+      peAtual: 4,
+      sanAtual: 12,
+      classe: "Combatente",
+      trilha: rulesByClass.Combatente.defaultTrilha,
+      classSkillChoices: ["", ""],
+      skillStates: createDefaultSkillState(),
+      selectedPowers: [],
+      selectedParanormalPowers: [],
+      rituaisSelecionados: [],
+      prestigio: 0,
+      inventario: [],
+    };
+  }
+
   function buildCharacterSnapshot() {
     return {
       nomePersonagem,
@@ -4400,7 +4432,7 @@ function AppContent() {
     setInventario([]);
   }
 
-  async function createRemoteCharacter(characterName, missionName = selectedMission) {
+  async function createRemoteCharacter(characterName, missionName = selectedMission, initialSnapshot = null) {
     const cleanName = characterName?.trim();
     if (!cleanName) return null;
     const mission = missions.find((item) => item.name === missionName);
@@ -4411,7 +4443,7 @@ function AppContent() {
           owner_id: user.id,
           mission_id: mission?.id || null,
           name: cleanName,
-          sheet_json: { ...buildCharacterSnapshot(), nomePersonagem: cleanName },
+          sheet_json: initialSnapshot || createInitialCharacterSnapshot(cleanName),
         },
       ])
       .select("id, name, mission_id, sheet_json, owner_id")
@@ -5519,7 +5551,7 @@ function AppContent() {
                       alert("Você precisa informar um nome.");
                       return;
                     }
-                    const created = await createRemoteCharacter(requestedName);
+                    const created = await createRemoteCharacter(requestedName, selectedMission, createInitialCharacterSnapshot(requestedName));
                     if (created) {
                       setSelectedCharacterId(created.id);
                       return;
@@ -5545,7 +5577,8 @@ function AppContent() {
                     }
                     isSwitchingCharacterRef.current = true;
                     resetCharacterDraftDefaults(requestedName);
-                    const created = await createRemoteCharacter(requestedName);
+                    const freshSnapshot = createInitialCharacterSnapshot(requestedName);
+                    const created = await createRemoteCharacter(requestedName, selectedMission, freshSnapshot);
                     const newId = created?.id || `char-${Date.now()}-new`;
                     if (!created) {
                       setPlayerCharacters((prev) => [
@@ -5557,7 +5590,7 @@ function AppContent() {
                     prevCharacterIdRef.current = newId;
                     setCharacterSheets((prev) => ({
                       ...prev,
-                      [newId]: { ...buildCharacterSnapshot(), nomePersonagem: requestedName },
+                      [newId]: freshSnapshot,
                     }));
                     setTimeout(() => {
                       isSwitchingCharacterRef.current = false;
@@ -5583,7 +5616,7 @@ function AppContent() {
                 const chosenName = selectedChar.nome.trim();
                 let nextCharacterId = selectedCharacterId;
                 if (!isUuid(nextCharacterId)) {
-                  const created = await createRemoteCharacter(chosenName);
+                  const created = await createRemoteCharacter(chosenName, selectedMission, createInitialCharacterSnapshot(chosenName));
                   if (created?.id) {
                     nextCharacterId = created.id;
                     setSelectedCharacterId(created.id);
@@ -9757,6 +9790,7 @@ export default function App() {
 
   return <AppContent key={user.id} />;
 }
+
 
 
 
