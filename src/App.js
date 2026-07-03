@@ -72,6 +72,18 @@ function isUuid(value) {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
+function normalizeRole(value) {
+  if (value === "adm") return "admin";
+  if (value === "jogador") return "player";
+  if (value === "dm" || value === "admin" || value === "player") return value;
+  return "player";
+}
+
+function canManageTable(value) {
+  const normalized = normalizeRole(value);
+  return normalized === "dm" || normalized === "admin";
+}
+
 const rulesByClass = {
   Combatente: {
     pvBase: 20,
@@ -4144,7 +4156,9 @@ function TabGlyph({ tab, active }) {
 
 function AppContent() {
   const { signOut, role, user } = useAuth();
-  const isDM = role === "adm";
+  const normalizedRole = normalizeRole(role);
+  const isAdmin = normalizedRole === "admin";
+  const isDM = canManageTable(normalizedRole);
   const storageKey = useMemo(() => `asa-sheet-v2:${user.id}`, [user.id]);
 
   // ==========================================
@@ -4533,11 +4547,14 @@ function AppContent() {
   }
 
   async function updateProfileRole(profileId, nextRole) {
-    if (!isDM) return;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: nextRole })
-      .eq("id", profileId);
+    if (!isAdmin) {
+      alert("Apenas administradores podem trocar roles.");
+      return;
+    }
+    const { error } = await supabase.rpc("admin_update_profile_role", {
+      target_profile_id: profileId,
+      next_role: nextRole,
+    });
     if (error) {
       alert(`Falha ao atualizar role: ${error.message}`);
       return;
@@ -4708,7 +4725,7 @@ function AppContent() {
   }, [selectedMission, selectedCharacterId]);
 
   useEffect(() => {
-    if (!selectedCharacterId || !preMissionReady) return;
+    if (!selectedCharacterId || !preMissionReady || !remoteCharactersReady) return;
     if (isSwitchingCharacterRef.current) return;
     const snapshot = buildCharacterSnapshot();
     setCharacterSheets((prev) => ({
@@ -4743,6 +4760,7 @@ function AppContent() {
     rituaisSelecionados,
     prestigio,
     inventario,
+    remoteCharactersReady,
   ]);
 
   useEffect(() => {
@@ -4927,10 +4945,10 @@ function AppContent() {
 
   const handleSalvarNome = async () => {
     if (!user) return;
-    await supabase
-      .from("profiles")
-      .update({ nome_personagem: nomePersonagem })
-      .eq("id", user.id);
+    const { error } = await supabase.rpc("update_my_profile_name", {
+      next_name: nomePersonagem,
+    });
+    if (error) console.warn("Falha ao salvar nome do perfil:", error.message);
   };
 
   useEffect(() => {
@@ -9504,12 +9522,14 @@ function AppContent() {
                       <label style={{ display: "grid", gap: "6px", marginBottom: "12px" }}>
                         <span style={styles.attrLabel}>ROLE</span>
                         <select
-                          value={profile.role || "jogador"}
+                          value={normalizeRole(profile.role)}
                           onChange={(e) => updateProfileRole(profile.id, e.target.value)}
                           style={styles.selectField}
+                          disabled={!isAdmin}
                         >
-                          <option value="jogador">jogador</option>
-                          <option value="adm">adm</option>
+                          <option value="player">player</option>
+                          <option value="dm">dm</option>
+                          <option value="admin">admin</option>
                         </select>
                       </label>
                       <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>
