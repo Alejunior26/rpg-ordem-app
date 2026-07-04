@@ -2,16 +2,9 @@ import { useState } from "react";
 import { useAuth } from "./auth/AuthProvider";
 
 export default function LoginPage() {
-  const {
-    signIn,
-    signUp,
-    resetPassword,
-    updatePassword,
-    passwordRecovery,
-    dismissPasswordRecovery,
-  } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
 
-  const [mode, setMode] = useState(passwordRecovery ? "recovery" : "login");
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -93,33 +86,6 @@ export default function LoginPage() {
     alert("E-mail de recuperação enviado. Verifique sua caixa de entrada.");
   }
 
-  async function handleUpdatePassword() {
-    if (!password || !confirmPassword) {
-      alert("Preencha a nova senha e a confirmacao.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      alert("As senhas nao coincidem.");
-      return;
-    }
-
-    if (password.length < 6) {
-      alert("Senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    const { error } = await updatePassword(password);
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setPassword("");
-    setConfirmPassword("");
-    alert("Senha atualizada com sucesso.");
-  }
-
   return (
     <div
       style={{
@@ -134,28 +100,24 @@ export default function LoginPage() {
         <div style={styles.glowLine} />
         <h1 style={styles.title}>A.S.A SYSTEM</h1>
         <p style={styles.subtitle}>
-          {passwordRecovery || mode === "recovery"
-            ? "Defina sua nova senha"
-            : mode === "login"
+          {mode === "login"
             ? "Acesso autorizado necessario"
             : "Criar nova identidade"}
         </p>
 
-        {!(passwordRecovery || mode === "recovery") && (
-          <input
-            style={styles.input}
-            placeholder="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        )}
+        <input
+          style={styles.input}
+          placeholder="email"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
         <div style={styles.passwordRow}>
           <input
             style={styles.input}
-            placeholder={passwordRecovery || mode === "recovery" ? "nova senha" : "senha"}
+            placeholder="senha"
             type={showPassword ? "text" : "password"}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
@@ -170,15 +132,11 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {(mode === "register" || passwordRecovery || mode === "recovery") && (
+        {mode === "register" && (
           <div style={styles.passwordRow}>
             <input
               style={styles.input}
-              placeholder={
-                passwordRecovery || mode === "recovery"
-                  ? "confirmar nova senha"
-                  : "confirmar senha"
-              }
+              placeholder="confirmar senha"
               type={showConfirmPassword ? "text" : "password"}
               autoComplete="new-password"
               value={confirmPassword}
@@ -194,25 +152,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {passwordRecovery || mode === "recovery" ? (
-          <>
-            <button style={styles.primary} onClick={handleUpdatePassword}>
-              ATUALIZAR SENHA
-            </button>
-
-            <button
-              style={styles.secondary}
-              onClick={() => {
-                dismissPasswordRecovery();
-                setMode("login");
-                setPassword("");
-                setConfirmPassword("");
-              }}
-            >
-              Voltar ao sistema
-            </button>
-          </>
-        ) : mode === "login" ? (
+        {mode === "login" ? (
           <>
             <button style={styles.primary} onClick={handleLogin}>
               ENTRAR

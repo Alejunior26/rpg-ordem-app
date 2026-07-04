@@ -19,11 +19,26 @@ function normalizeRole(value) {
   return "player";
 }
 
+function isPasswordRecoveryUrl() {
+  if (typeof window === "undefined") return false;
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashRaw = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const hashParams = new URLSearchParams(hashRaw);
+
+  return (
+    searchParams.get("auth") === "recovery" ||
+    searchParams.get("type") === "recovery" ||
+    hashParams.get("type") === "recovery"
+  );
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("player"); // Ja comeca com fallback seguro
   const [loading, setLoading] = useState(true);
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryUrl);
 
   useEffect(() => {
     if (AUTH_BYPASS_ENABLED) {
@@ -64,6 +79,9 @@ export function AuthProvider({ children }) {
 
     // 1. Pega a sessão inicial assim que abre o app
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isPasswordRecoveryUrl()) {
+        setPasswordRecovery(true);
+      }
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       fetchProfileAndStopLoading(currentUser);

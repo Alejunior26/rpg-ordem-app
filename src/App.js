@@ -1,5 +1,6 @@
 import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./LoginPage";
+import PasswordResetPage from "./PasswordResetPage";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { asaBestiary } from "./data/asaBestiary";
@@ -6567,7 +6568,7 @@ export default function App() {
       </div>
     );
 
-  if (passwordRecovery) return <LoginPage />;
+  if (passwordRecovery) return <PasswordResetPage />;
 
   if (authFeedback) {
     const accent =
