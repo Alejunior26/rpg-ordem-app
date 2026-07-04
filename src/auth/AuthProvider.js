@@ -10,6 +10,7 @@ const DEV_ADMIN_USER = {
 const AUTH_REDIRECT_URL =
   process.env.REACT_APP_AUTH_REDIRECT_URL || window.location.origin;
 const SIGNUP_CONFIRM_REDIRECT = `${AUTH_REDIRECT_URL}?auth=confirmed`;
+const PASSWORD_RECOVERY_REDIRECT = `${AUTH_REDIRECT_URL}?auth=recovery`;
 
 function normalizeRole(value) {
   if (value === "adm") return "admin";
@@ -22,6 +23,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("player"); // Ja comeca com fallback seguro
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     if (AUTH_BYPASS_ENABLED) {
@@ -69,7 +71,10 @@ export function AuthProvider({ children }) {
 
     // 2. Fica escutando se o cara fez login/logout depois
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === "PASSWORD_RECOVERY") {
+          setPasswordRecovery(true);
+        }
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         fetchProfileAndStopLoading(currentUser);
@@ -156,12 +161,39 @@ export function AuthProvider({ children }) {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: AUTH_REDIRECT_URL,
+        redirectTo: PASSWORD_RECOVERY_REDIRECT,
       });
       return { error };
     } catch (error) {
       return { error };
     }
+  }
+
+  async function updatePassword(newPassword) {
+    if (AUTH_BYPASS_ENABLED) {
+      return {
+        error: {
+          message:
+            "Atualizacao de senha indisponivel com AUTH BYPASS ativo. Desative REACT_APP_BYPASS_AUTH para usar esse fluxo.",
+        },
+      };
+    }
+
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (!error) {
+        setPasswordRecovery(false);
+      }
+      return { data, error };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  function dismissPasswordRecovery() {
+    setPasswordRecovery(false);
   }
 
   return (
@@ -170,10 +202,13 @@ export function AuthProvider({ children }) {
         user,
         role,
         loading,
+        passwordRecovery,
         signIn,
         signUp,
         signOut,
         resetPassword,
+        updatePassword,
+        dismissPasswordRecovery,
       }}
     >
       {children}
