@@ -2,6 +2,7 @@ import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./LoginPage";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
+import { asaBestiary } from "./data/asaBestiary";
 
 import {
   ATTR_KEYS,
@@ -42,6 +43,65 @@ import {
   getAllowedModsForItem,
 } from "./domain/itemRules";
 import { canManageTable, isUuid, normalizeRole } from "./domain/roles";
+
+const emptyMonsterDraft = {
+  name: "",
+  vd: "",
+  type: "",
+  defense: "",
+  hp: "",
+  senses: "",
+  resistances: "",
+  vulnerabilities: "",
+  traitsText: "",
+  actionsText: "",
+};
+
+function slugifyMonsterName(value) {
+  return String(value || "monstro")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function parseLines(value) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function parseMonsterActions(value) {
+  return parseLines(value).map((line) => {
+    const [rawName, ...rest] = line.split(":");
+    const name = rawName?.trim() || "Acao";
+    return {
+      name,
+      type: "Custom",
+      text: rest.join(":").trim() || line,
+    };
+  });
+}
+
+function monsterFromDraft(draft) {
+  return {
+    id: `custom-${slugifyMonsterName(draft.name)}-${Date.now()}`,
+    custom: true,
+    name: draft.name.trim(),
+    vd: Number(draft.vd) || 0,
+    type: draft.type.trim() || "Ameaca customizada",
+    defense: draft.defense.trim(),
+    hp: draft.hp.trim(),
+    senses: draft.senses.trim(),
+    resistances: draft.resistances.trim(),
+    vulnerabilities: draft.vulnerabilities.trim(),
+    traits: parseLines(draft.traitsText),
+    actions: parseMonsterActions(draft.actionsText),
+  };
+}
 
 const styles = {
   selectField: {
@@ -383,6 +443,15 @@ function TabGlyph({ tab, active }) {
       </svg>
     );
   }
+  if (tab === "bestiario") {
+    return (
+      <svg {...common}>
+        <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" />
+        <path d="M8 8h7M8 12h8M8 16h5" />
+        <path d="M18 7h1.5A1.5 1.5 0 0 1 21 8.5V20" />
+      </svg>
+    );
+  }
   return (
     <svg {...common}>
       <path d="M4 6h8l-2 4H2l2-4Zm8 8h8l-2 4h-8l2-4Z" />
@@ -397,6 +466,7 @@ function AppContent() {
   const isAdmin = normalizedRole === "admin";
   const isDM = canManageTable(normalizedRole);
   const storageKey = useMemo(() => `asa-sheet-v2:${user.id}`, [user.id]);
+  const bestiaryStorageKey = useMemo(() => `asa-bestiary-v1:${user.id}`, [user.id]);
 
   // ==========================================
   // 1. TODOS OS ESTADOS (useState) PRIMEIRO!
@@ -440,6 +510,10 @@ function AppContent() {
   const [turnDoneBy, setTurnDoneBy] = useState([]);
   const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
   const [npcNameInput, setNpcNameInput] = useState("");
+  const [customBestiary, setCustomBestiary] = useState([]);
+  const [customBestiaryReady, setCustomBestiaryReady] = useState(false);
+  const [monsterDraft, setMonsterDraft] = useState(emptyMonsterDraft);
+  const [selectedBestiaryId, setSelectedBestiaryId] = useState(asaBestiary[0]?.id || "");
   const [selectedMission, setSelectedMission] = useState("");
   const [missions, setMissions] = useState([]);
   const [remoteCharactersReady, setRemoteCharactersReady] = useState(false);
@@ -528,13 +602,30 @@ function AppContent() {
   const prevCharacterIdRef = useRef("");
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
-  const visibleCombatLogs = useMemo(
-    () =>
-      combatLogs.filter(
-        (log) => !(typeof log?.acao === "string" && log.acao.startsWith("[FLOW]"))
-      ),
-    [combatLogs]
+  const bestiaryEntries = useMemo(
+    () => [...asaBestiary, ...customBestiary],
+    [customBestiary]
   );
+  const selectedBestiary = useMemo(
+    () =>
+      bestiaryEntries.find((monster) => monster.id === selectedBestiaryId) ||
+      bestiaryEntries[0],
+    [bestiaryEntries, selectedBestiaryId]
+  );
+  const lastCombatResetAt = useMemo(() => {
+    const resets = parseFlowEvents(combatLogs).filter((event) => event?.event === "RESET");
+    return resets.length
+      ? Number(resets[resets.length - 1].logCreatedAt || resets[resets.length - 1].at || 0)
+      : 0;
+  }, [combatLogs]);
+  const visibleCombatLogs = useMemo(() => {
+    return combatLogs.filter((log) => {
+      if (typeof log?.acao === "string" && log.acao.startsWith("[FLOW]")) return false;
+      if (!lastCombatResetAt) return true;
+      const createdAt = log?.created_at ? new Date(log.created_at).getTime() : 0;
+      return createdAt >= lastCombatResetAt;
+    });
+  }, [combatLogs, lastCombatResetAt]);
   const alreadyJoinedCombat = useMemo(
     () => combatParticipants.some((p) => p.userId === user.id),
     [combatParticipants, user.id]
@@ -550,6 +641,29 @@ function AppContent() {
     if (!user) return;
     loadRemoteCampaignData();
   }, [user]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(bestiaryStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setCustomBestiary(parsed);
+      }
+    } catch {
+      setCustomBestiary([]);
+    } finally {
+      setCustomBestiaryReady(true);
+    }
+  }, [bestiaryStorageKey]);
+
+  useEffect(() => {
+    if (!customBestiaryReady) return;
+    try {
+      localStorage.setItem(bestiaryStorageKey, JSON.stringify(customBestiary));
+    } catch {
+      // Se o navegador bloquear armazenamento local, o bestiario customizado fica so nesta sessao.
+    }
+  }, [bestiaryStorageKey, customBestiary, customBestiaryReady]);
 
   useEffect(() => {
     if (activeTab === "admin") loadAdminPanelData();
@@ -807,7 +921,10 @@ function AppContent() {
       const raw = log.acao.slice(6);
       try {
         const event = JSON.parse(raw);
-        events.push(event);
+        events.push({
+          ...event,
+          logCreatedAt: log.created_at ? new Date(log.created_at).getTime() : null,
+        });
       } catch {
         // ignora evento inválido
       }
@@ -822,10 +939,19 @@ function AppContent() {
     let idx = 0;
 
     for (const event of parseFlowEvents(logs)) {
+      if (event?.event === "RESET") {
+        joinedByUser.clear();
+        order = [];
+        done = [];
+        idx = 0;
+      }
       if (event?.event === "JOIN" && event?.payload?.userId) {
         joinedByUser.set(event.payload.userId, {
           userId: event.payload.userId,
           nome: event.payload.nome || "Sem nome",
+          kind: event.payload.kind || "player",
+          monsterId: event.payload.monsterId || null,
+          monster: event.payload.monster || null,
         });
       }
       if (event?.event === "SET_ORDER" && Array.isArray(event?.payload?.order)) {
@@ -862,6 +988,80 @@ function AppContent() {
         personagem: "SISTEMA FLOW",
         acao: `[FLOW]${JSON.stringify({ event, payload, at: Date.now() })}`,
         rodada: rodadaAtual,
+      },
+    ]);
+  }
+
+  async function addMonsterToCombat(monster) {
+    if (!isDM || !monster) return;
+    const monsterId = `monster:${monster.id}:${Date.now()}`;
+    await emitCombatFlow("JOIN", {
+      userId: monsterId,
+      nome: monster.name,
+      kind: "monster",
+      monsterId: monster.id,
+      monster,
+    });
+    await supabase.from("combat_log").insert([
+      {
+        personagem: "SISTEMA A.S.A.",
+        acao: `${monster.name} entrou no combate. VD ${monster.vd || "?"} | Defesa ${
+          monster.defense || "?"
+        } | PV ${monster.hp || "?"}.`,
+        rodada: rodadaAtual,
+      },
+    ]);
+  }
+
+  async function sendMonsterActionToLog(participant, action) {
+    if (!isDM || !participant || !action) return;
+    await supabase.from("combat_log").insert([
+      {
+        personagem: participant.nome,
+        acao: `${action.type ? `${action.type} - ` : ""}${action.name}: ${action.text}`,
+        rodada: rodadaAtual,
+      },
+    ]);
+  }
+
+  function updateMonsterDraft(field, value) {
+    setMonsterDraft((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function saveCustomMonster() {
+    if (!monsterDraft.name.trim()) {
+      alert("Informe o nome do monstro.");
+      return;
+    }
+    const monster = monsterFromDraft(monsterDraft);
+    setCustomBestiary((prev) => [...prev, monster]);
+    setSelectedBestiaryId(monster.id);
+    setMonsterDraft(emptyMonsterDraft);
+  }
+
+  function removeCustomMonster(monsterId) {
+    setCustomBestiary((prev) => prev.filter((monster) => monster.id !== monsterId));
+    if (selectedBestiaryId === monsterId) setSelectedBestiaryId(asaBestiary[0]?.id || "");
+  }
+
+  async function resetCombatTable() {
+    if (!isDM) return;
+    if (!window.confirm("Resetar combate? A rodada, ordem, participantes e timeline visivel voltam ao zero.")) {
+      return;
+    }
+    setRodadaAtual(1);
+    setCombatParticipants([]);
+    setTurnOrder([]);
+    setTurnDoneBy([]);
+    setTurnIndex(0);
+    setSelectedOrderDraft([]);
+    await supabase.from("combat_state").update({ rodada: 1 }).eq("id", 1);
+    await emitCombatFlow("RESET", { round: 1 });
+    await supabase.from("combat_log").insert([
+      {
+        personagem: "SISTEMA A.S.A.",
+        acao: "Combate resetado pelo mestre. Mesa limpa e rodada reiniciada.",
+        rodada: 1,
       },
     ]);
   }
@@ -2744,6 +2944,19 @@ function AppContent() {
         >
           <TabGlyph tab="inventario" active={activeTab === "inventario"} />
         </button>
+        {isDM && (
+          <button
+            onClick={() => setActiveTab("bestiario")}
+            style={{
+              ...styles.navBtn,
+              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+              color: activeTab === "bestiario" ? colors.brand : "#333",
+            }}
+            title="Bestiario"
+          >
+            <TabGlyph tab="bestiario" active={activeTab === "bestiario"} />
+          </button>
+        )}
         <button
           onClick={() => setActiveTab("combate")}
           style={{
@@ -4399,6 +4612,264 @@ function AppContent() {
             </div>
           </div>
         )}
+        {activeTab === "bestiario" && isDM && (
+          <div style={styles.container}>
+            <div style={styles.statusBox}>
+              <h2 style={styles.sectionTitle}>BESTIARIO_A.S.A.</h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 0.9fr) 1.4fr",
+                  gap: "16px",
+                }}
+              >
+                <div style={{ display: "grid", gap: "10px", alignContent: "start" }}>
+                  <select
+                    value={selectedBestiary?.id || ""}
+                    onChange={(e) => setSelectedBestiaryId(e.target.value)}
+                    style={styles.selectField}
+                  >
+                    {bestiaryEntries.map((monster) => (
+                      <option key={monster.id} value={monster.id}>
+                        VD {monster.vd || "?"} - {monster.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => addMonsterToCombat(selectedBestiary)}
+                    style={{
+                      ...styles.btnStep,
+                      width: "100%",
+                      borderColor: colors.brand,
+                      color: colors.brand,
+                      padding: "10px",
+                    }}
+                  >
+                    Adicionar selecionado ao combate
+                  </button>
+                  {selectedBestiary?.custom && (
+                    <button
+                      onClick={() => removeCustomMonster(selectedBestiary.id)}
+                      style={{
+                        ...styles.btnStep,
+                        width: "100%",
+                        borderColor: colors.pv,
+                        color: colors.pv,
+                        padding: "10px",
+                      }}
+                    >
+                      Remover monstro customizado
+                    </button>
+                  )}
+
+                  <div
+                    style={{
+                      ...styles.summaryCard,
+                      borderColor: `${colors.brand}33`,
+                    }}
+                  >
+                    <div style={{ color: colors.brand, fontSize: "12px", marginBottom: "8px" }}>
+                      AMEACAS CADASTRADAS
+                    </div>
+                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
+                      {asaBestiary.length} do bestiario A.S.A. Tower 2077
+                      <br />
+                      {customBestiary.length} customizadas neste navegador
+                    </div>
+                  </div>
+                </div>
+
+                {selectedBestiary && (
+                  <div style={styles.summaryCard}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                        borderBottom: `1px solid ${colors.border}`,
+                        paddingBottom: "12px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ color: "#fff", margin: "0 0 6px 0" }}>
+                          {selectedBestiary.name}
+                        </h3>
+                        <div style={{ color: "#9ca3af", fontSize: "12px" }}>
+                          {selectedBestiary.type}
+                        </div>
+                      </div>
+                      <div style={{ color: colors.pe, fontWeight: "bold" }}>
+                        VD {selectedBestiary.vd || "?"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+                        gap: "10px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>Defesa:</strong>{" "}
+                        {selectedBestiary.defense || "-"}
+                      </div>
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>PV:</strong>{" "}
+                        {selectedBestiary.hp || "-"}
+                      </div>
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>Sentidos:</strong>{" "}
+                        {selectedBestiary.senses || "-"}
+                      </div>
+                    </div>
+
+                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
+                      <strong style={{ color: colors.brand }}>Resistencias:</strong>{" "}
+                      {selectedBestiary.resistances || "-"}
+                      <br />
+                      <strong style={{ color: colors.brand }}>Vulnerabilidades:</strong>{" "}
+                      {selectedBestiary.vulnerabilities || "-"}
+                    </div>
+
+                    {!!selectedBestiary.traits?.length && (
+                      <div style={{ marginTop: "14px" }}>
+                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
+                          TRAÇOS
+                        </div>
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {selectedBestiary.traits.map((trait, index) => (
+                            <div key={index} style={{ color: "#d1d5db", fontSize: "12px" }}>
+                              {trait}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!!selectedBestiary.actions?.length && (
+                      <div style={{ marginTop: "14px" }}>
+                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
+                          HABILIDADES
+                        </div>
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {selectedBestiary.actions.map((action, index) => (
+                            <div
+                              key={`${action.name}-${index}`}
+                              style={{
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: "8px",
+                                padding: "10px",
+                              }}
+                            >
+                              <div style={{ color: "#fff", fontWeight: "bold", fontSize: "12px" }}>
+                                {action.type} - {action.name}
+                              </div>
+                              <div style={{ color: "#aaa", fontSize: "12px", marginTop: "4px" }}>
+                                {action.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.statusBox}>
+              <h2 style={styles.sectionTitle}>ADICIONAR_MONSTRO</h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  value={monsterDraft.name}
+                  onChange={(e) => updateMonsterDraft("name", e.target.value)}
+                  placeholder="Nome"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.vd}
+                  onChange={(e) => updateMonsterDraft("vd", e.target.value)}
+                  placeholder="VD"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.type}
+                  onChange={(e) => updateMonsterDraft("type", e.target.value)}
+                  placeholder="Tipo / papel"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.defense}
+                  onChange={(e) => updateMonsterDraft("defense", e.target.value)}
+                  placeholder="Defesa"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.hp}
+                  onChange={(e) => updateMonsterDraft("hp", e.target.value)}
+                  placeholder="PV"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.senses}
+                  onChange={(e) => updateMonsterDraft("senses", e.target.value)}
+                  placeholder="Sentidos / iniciativa"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.resistances}
+                  onChange={(e) => updateMonsterDraft("resistances", e.target.value)}
+                  placeholder="Resistencias"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.vulnerabilities}
+                  onChange={(e) => updateMonsterDraft("vulnerabilities", e.target.value)}
+                  placeholder="Vulnerabilidades"
+                  style={styles.selectField}
+                />
+                <textarea
+                  value={monsterDraft.traitsText}
+                  onChange={(e) => updateMonsterDraft("traitsText", e.target.value)}
+                  placeholder="Traços, um por linha"
+                  rows={5}
+                  style={{ ...styles.selectField, resize: "vertical" }}
+                />
+                <textarea
+                  value={monsterDraft.actionsText}
+                  onChange={(e) => updateMonsterDraft("actionsText", e.target.value)}
+                  placeholder={"Habilidades, uma por linha\nEx: Garra: Teste 3d20+10 | Dano 2d8"}
+                  rows={5}
+                  style={{ ...styles.selectField, resize: "vertical" }}
+                />
+              </div>
+              <button
+                onClick={saveCustomMonster}
+                style={{
+                  ...styles.btnStep,
+                  marginTop: "12px",
+                  width: "100%",
+                  padding: "12px",
+                  borderColor: colors.brand,
+                  color: colors.brand,
+                }}
+              >
+                Salvar monstro no bestiario
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE) */}
         {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE & TIMELINE) */}
         {activeTab === "combate" && (
@@ -4611,6 +5082,37 @@ function AppContent() {
                         + NPC
                       </button>
                     </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+                        gap: "8px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <select
+                        value={selectedBestiary?.id || ""}
+                        onChange={(e) => setSelectedBestiaryId(e.target.value)}
+                        style={{ ...styles.selectField, padding: "8px" }}
+                      >
+                        {bestiaryEntries.map((monster) => (
+                          <option key={monster.id} value={monster.id}>
+                            VD {monster.vd || "?"} - {monster.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => addMonsterToCombat(selectedBestiary)}
+                        style={{
+                          ...styles.btnStep,
+                          whiteSpace: "nowrap",
+                          borderColor: colors.brand,
+                          color: colors.brand,
+                        }}
+                      >
+                        + Monstro
+                      </button>
+                    </div>
                     <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
                       {combatParticipants.map((p) => (
                         <label
@@ -4664,6 +5166,84 @@ function AppContent() {
                     >
                       Definir ordem selecionada
                     </button>
+                    <button
+                      onClick={resetCombatTable}
+                      style={{
+                        ...styles.btnStep,
+                        width: "100%",
+                        marginTop: "8px",
+                        borderColor: colors.pv,
+                        color: colors.pv,
+                      }}
+                    >
+                      Resetar combate
+                    </button>
+                  </div>
+                )}
+
+                {isDM && combatParticipants.some((p) => p.kind === "monster") && (
+                  <div
+                    style={{
+                      marginBottom: "20px",
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: "10px",
+                      padding: "10px",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+                      ACOES DE MONSTROS
+                    </div>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      {combatParticipants
+                        .filter((participant) => participant.kind === "monster")
+                        .map((participant) => {
+                          const monster =
+                            participant.monster ||
+                            bestiaryEntries.find(
+                              (entry) => entry.id === participant.monsterId
+                            );
+                          return (
+                            <div
+                              key={participant.userId}
+                              style={{
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: "8px",
+                                padding: "10px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  color: "#fff",
+                                  fontWeight: "bold",
+                                  fontSize: "12px",
+                                  marginBottom: "8px",
+                                }}
+                              >
+                                {participant.nome}
+                              </div>
+                              <div style={{ display: "grid", gap: "6px" }}>
+                                {(monster?.actions || []).map((action, index) => (
+                                  <button
+                                    key={`${participant.userId}-${action.name}-${index}`}
+                                    onClick={() =>
+                                      sendMonsterActionToLog(participant, action)
+                                    }
+                                    style={{
+                                      ...styles.btnStep,
+                                      textAlign: "left",
+                                      borderColor: colors.brand,
+                                      color: "#d1d5db",
+                                    }}
+                                  >
+                                    {action.type} - {action.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
 
