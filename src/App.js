@@ -2090,6 +2090,7 @@ function AppContent() {
                   .from("profiles")
                   .update({ nome_personagem: chosenName })
                   .eq("id", user.id);
+                setActiveTab("status");
                 setPreMissionReady(true);
               }}
               style={{
@@ -6506,7 +6507,7 @@ function AppContent() {
 }
 
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, passwordRecovery } = useAuth();
   const [authFeedback, setAuthFeedback] = useState(null);
 
   useEffect(() => {
@@ -6541,16 +6542,12 @@ export default function App() {
         title: "E-mail confirmado",
         text: "Sua conta foi confirmada com sucesso. Você já pode entrar no sistema.",
       };
-    } else if (authParam === "reset") {
-      feedback = {
-        type: "info",
-        title: "Recuperação de senha",
-        text: "Link de recuperação validado. Defina sua nova senha para concluir.",
-      };
     }
 
     if (feedback) {
       setAuthFeedback(feedback);
+    }
+    if (feedback || authParam === "recovery" || hashType === "recovery") {
       const cleanUrl = `${window.location.origin}${window.location.pathname}`;
       window.history.replaceState({}, document.title, cleanUrl);
     }
@@ -6569,6 +6566,8 @@ export default function App() {
         Conectando ao terminal A.S.A...
       </div>
     );
+
+  if (passwordRecovery) return <LoginPage />;
 
   if (authFeedback) {
     const accent =
