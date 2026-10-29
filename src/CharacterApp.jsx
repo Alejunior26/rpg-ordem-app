@@ -1,13 +1,10 @@
 import { useAuth } from "./auth/AuthProvider";
-import LoginPage from "./LoginPage";
-import PasswordResetPage from "./PasswordResetPage";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { asaBestiary } from "./data/asaBestiary";
 
 import {
   ATTR_KEYS,
-  MISSIONS_CATALOG,
   NEX_VALUES,
   TRAINING_BONUS,
   TRAINING_LABEL,
@@ -43,7 +40,13 @@ import {
   getAllowedCursesForItem,
   getAllowedModsForItem,
 } from "./domain/itemRules";
+import { useDialogFocus } from "./hooks/useDialogFocus";
+import { useMissionCombat } from "./hooks/useMissionCombat";
+import { createCharacterSaveQueue } from "./services/characterStore";
+import SyncStatus from "./components/SyncStatus";
 import { canManageTable, isUuid, normalizeRole } from "./domain/roles";
+
+const EMPTY_COMBAT_LIST = [];
 
 const emptyMonsterDraft = {
   name: "",
@@ -461,7 +464,7 @@ function TabGlyph({ tab, active }) {
   );
 }
 
-function AppContent() {
+export default function AppContent() {
   const { signOut, role, user } = useAuth();
   const normalizedRole = normalizeRole(role);
   const isAdmin = normalizedRole === "admin";
@@ -502,13 +505,7 @@ function AppContent() {
   const [selectedParanormalPowers, setSelectedParanormalPowers] = useState([]);
   const [nexPopup, setNexPopup] = useState(null);
 
-  const [rodadaAtual, setRodadaAtual] = useState(1);
-  const [combatLogs, setCombatLogs] = useState([]);
   const [aliadosCampanha, setAliadosCampanha] = useState([]);
-  const [combatParticipants, setCombatParticipants] = useState([]);
-  const [turnOrder, setTurnOrder] = useState([]);
-  const [turnIndex, setTurnIndex] = useState(0);
-  const [turnDoneBy, setTurnDoneBy] = useState([]);
   const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
   const [npcNameInput, setNpcNameInput] = useState("");
   const [customBestiary, setCustomBestiary] = useState([]);
@@ -518,15 +515,51 @@ function AppContent() {
   const [selectedMission, setSelectedMission] = useState("");
   const [missions, setMissions] = useState([]);
   const [remoteCharactersReady, setRemoteCharactersReady] = useState(false);
-  const [playerCharacters, setPlayerCharacters] = useState([
-    { id: `char-${Date.now()}`, nome: "" },
-  ]);
+  const [hydratedCharacterId, setHydratedCharacterId] = useState("");
+  const [syncStatus, setSyncStatus] = useState({ state: "loading", message: "Carregando suas fichas…" });
+  const [campaignError, setCampaignError] = useState("");
+  const [missionMembers, setMissionMembers] = useState([]);
+  const [playerCharacters, setPlayerCharacters] = useState([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
   const [preMissionReady, setPreMissionReady] = useState(false);
   const [characterSheets, setCharacterSheets] = useState({});
   const [adminProfiles, setAdminProfiles] = useState([]);
   const [adminCharacters, setAdminCharacters] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
+  const missionCombat = useMissionCombat(isUuid(selectedMission) ? selectedMission : null);
+  const rodadaAtual = missionCombat.state?.rodada || 1;
+  const combatParticipants = missionCombat.state?.participants || EMPTY_COMBAT_LIST;
+  const turnOrder = missionCombat.state?.turn_order || EMPTY_COMBAT_LIST;
+  const turnIndex = missionCombat.state?.turn_index || 0;
+  const turnDoneBy = missionCombat.state?.turn_done_by || EMPTY_COMBAT_LIST;
+  const visibleCombatLogs = missionCombat.logs;
+  const appendCombatLog = missionCombat.appendLogs;
+  const saveQueue = useMemo(() => createCharacterSaveQueue({
+    ownerId: user.id, storage: window.localStorage, onStatus: setSyncStatus,
+    save: async (id, revision, snapshot) => {
+      const { data, error } = await supabase.rpc("asa_save_character", {
+        p_character_id: id, p_expected_revision: revision, p_name: snapshot.nomePersonagem,
+        p_sheet: { ...snapshot, schemaVersion: 1 },
+      });
+      if (error) throw error;
+      return data;
+    },
+  }), [user.id]);
+
+  function exportDrafts() {
+    const blob = new Blob([JSON.stringify({ pending: saveQueue.exportPending(), legacy: localStorage.getItem(storageKey), archived: localStorage.getItem(`asa-conflicts-v1:${user.id}`), characterSheets }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = "asa-fichas-backup.json"; link.click();
+    URL.revokeObjectURL(url);
+  }
+  const syncIndicator = <SyncStatus status={syncStatus} error={campaignError || missionCombat.error}
+    onRetry={() => { void saveQueue.flush(); void missionCombat.refresh(); if (!remoteCharactersReady) void loadRemoteCampaignData(); }} onExport={exportDrafts} onReload={() => { saveQueue.archivePending(); window.location.reload(); }} />;
+
+  async function switchCharacter(id) {
+    if (!(await saveQueue.flush())) return;
+    setSelectedCharacterId(id);
+  }
+
 
   const [rituaisSelecionados, setRituaisSelecionados] = useState([]);
   const [alvosRituais, setAlvosRituais] = useState({});
@@ -588,6 +621,8 @@ function AppContent() {
     typeof window !== "undefined" ? window.innerWidth : 1280
   );
 
+  const closeDialogs = useCallback(() => { setInfoModal(null); setIsRitualModalOpen(false); setNexPopup(null); }, []);
+  useDialogFocus(infoModal ? "info" : isRitualModalOpen ? "ritual" : nexPopup ? "nex" : null, closeDialogs);
   const [activeTab, setActiveTab] = useState("status");
   const [editingAttr, setEditingAttr] = useState(null);
   const [attrError, setAttrError] = useState("");
@@ -598,8 +633,6 @@ function AppContent() {
   const skillsTimerRef = useRef(null);
   const profileTimerRef = useRef(null);
   const prevNexRef = useRef(5);
-  const isInitialMount = useRef(true);
-  const isSwitchingCharacterRef = useRef(false);
   const prevCharacterIdRef = useRef("");
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
@@ -613,20 +646,6 @@ function AppContent() {
       bestiaryEntries[0],
     [bestiaryEntries, selectedBestiaryId]
   );
-  const lastCombatResetAt = useMemo(() => {
-    const resets = parseFlowEvents(combatLogs).filter((event) => event?.event === "RESET");
-    return resets.length
-      ? Number(resets[resets.length - 1].logCreatedAt || resets[resets.length - 1].at || 0)
-      : 0;
-  }, [combatLogs]);
-  const visibleCombatLogs = useMemo(() => {
-    return combatLogs.filter((log) => {
-      if (typeof log?.acao === "string" && log.acao.startsWith("[FLOW]")) return false;
-      if (!lastCombatResetAt) return true;
-      const createdAt = log?.created_at ? new Date(log.created_at).getTime() : 0;
-      return createdAt >= lastCombatResetAt;
-    });
-  }, [combatLogs, lastCombatResetAt]);
   const alreadyJoinedCombat = useMemo(
     () => combatParticipants.some((p) => p.userId === user.id),
     [combatParticipants, user.id]
@@ -737,7 +756,8 @@ function AppContent() {
 
   function applyCharacterSnapshot(data) {
     if (!data) return;
-    if (data.nomePersonagem) setNomePersonagem(data.nomePersonagem);
+    data = { ...createInitialCharacterSnapshot(""), ...data };
+    setNomePersonagem(data.nomePersonagem || "");
     if (data.nex) {
       prevNexRef.current = data.nex;
       setNex(data.nex);
@@ -764,44 +784,11 @@ function AppContent() {
     if (Array.isArray(data.inventario)) setInventario(data.inventario);
   }
 
-  function resetCharacterDraftDefaults(characterName = "") {
-    prevNexRef.current = 5;
-    setNomePersonagem(characterName);
-    setNex(5);
-    setDeslocamento(9);
-    setDefArmadura(0);
-    setDefOutros(0);
-    setOrigin("Acadêmico");
-    setOriginLocked(false);
-    setSetupStep(1);
-    setSetupComplete(false);
-    setAttrs({
-      FOR: 1,
-      AGI: 2,
-      INT: 2,
-      VIG: 2,
-      PRE: 2,
-    });
-    setPvAtual(20);
-    setPeAtual(4);
-    setSanAtual(12);
-    setClasse("Combatente");
-    setTrilha(rulesByClass.Combatente.defaultTrilha);
-    setClassSkillChoices(["", ""]);
-    setSkillStates(createDefaultSkillState());
-    setSelectedPowers([]);
-    setSelectedParanormalPowers([]);
-    setRituaisSelecionados([]);
-    setAlvosRituais({});
-    setVersoesRituais({});
-    setPrestigio(0);
-    setInventario([]);
-  }
-
   async function createRemoteCharacter(characterName, missionName = selectedMission, initialSnapshot = null) {
     const cleanName = characterName?.trim();
     if (!cleanName) return null;
-    const mission = missions.find((item) => item.name === missionName);
+    const mission = missions.find((item) => item.id === missionName);
+    if (!mission) { setCampaignError("Escolha uma missão disponível antes de criar o personagem."); return null; }
     const { data, error } = await supabase
       .from("characters")
       .insert([
@@ -812,14 +799,16 @@ function AppContent() {
           sheet_json: initialSnapshot || createInitialCharacterSnapshot(cleanName),
         },
       ])
-      .select("id, name, mission_id, sheet_json, owner_id")
+      .select("id, name, mission_id, sheet_json, owner_id, revision")
       .single();
 
     if (error) {
-      console.warn("Falha ao criar personagem no Supabase:", error.message);
+      setCampaignError("Não foi possível criar o personagem. Nenhuma ficha local substituiu a gravação no servidor.");
       return null;
     }
 
+    saveQueue.seed(data.id, data.revision, data.sheet_json);
+    setCampaignError("");
     setPlayerCharacters((prev) => [
       ...prev.filter((item) => item.id !== data.id),
       { id: data.id, nome: data.name, missionId: data.mission_id, remote: true },
@@ -828,71 +817,57 @@ function AppContent() {
     return data;
   }
 
-  async function persistSelectedCharacterSheet(snapshot = buildCharacterSnapshot()) {
-    if (!selectedCharacterId || !isUuid(selectedCharacterId)) return;
-    const { error } = await supabase
-      .from("characters")
-      .update({
-        name: snapshot.nomePersonagem || getActiveCharacterName(),
-        sheet_json: snapshot,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selectedCharacterId);
-
-    if (error) console.warn("Falha ao salvar personagem:", error.message);
+  async function loadRemoteCampaignData() {
+    setRemoteCharactersReady(false);
+    try {
+      const [missionResult, characterResult] = await Promise.all([
+        supabase.from("missions").select("id, name, description").order("created_at", { ascending: true }),
+        supabase.from("characters").select("id, name, mission_id, sheet_json, owner_id, revision").eq("owner_id", user.id).order("updated_at", { ascending: false }),
+      ]);
+      if (missionResult.error || characterResult.error) throw missionResult.error || characterResult.error;
+      const missionRows = missionResult.data || [];
+      const rows = characterResult.data || [];
+      setMissions(missionRows);
+      setSelectedMission((prev) => missionRows.some((m) => m.id === prev) ? prev : missionRows[0]?.id || "");
+      setPlayerCharacters(rows.map((item) => ({ id: item.id, nome: item.name, missionId: item.mission_id, remote: true })));
+      setCharacterSheets(Object.fromEntries(rows.map((item) => [item.id, saveQueue.seed(item.id, item.revision, item.sheet_json || {})])));
+      setSelectedCharacterId((prev) => rows.some((c) => c.id === prev) ? prev : rows[0]?.id || "");
+      setRemoteCharactersReady(true);
+      setCampaignError("");
+      if (!saveQueue.hasPending()) setSyncStatus({ state: "saved", message: "Suas fichas estão sincronizadas." });
+    } catch {
+      setCampaignError("Não foi possível carregar suas campanhas e fichas. Confira a conexão e tente novamente.");
+      setSyncStatus({ state: "error", message: "Carregamento não concluído." });
+    }
   }
 
-  async function loadRemoteCampaignData() {
-    const { data: missionRows, error: missionError } = await supabase
-      .from("missions")
-      .select("id, name, description")
-      .order("created_at", { ascending: true });
+  async function createMission() {
+    const name = window.prompt("Nome da missão:")?.trim();
+    if (!name) return;
+    const { data, error } = await supabase.from("missions").insert({ name, created_by: user.id }).select("id, name, description").single();
+    if (error) { setCampaignError("Não foi possível criar a missão."); return; }
+    setMissions((prev) => [...prev, data]); setSelectedMission(data.id);
+  }
 
-    if (!missionError && missionRows?.length) {
-      setMissions(missionRows);
-      setSelectedMission((prev) => prev || missionRows[0].name);
-    } else {
-      setMissions(MISSIONS_CATALOG.map((name) => ({ id: name, name })));
-    }
-
-    const { data: characterRows, error: characterError } = await supabase
-      .from("characters")
-      .select("id, name, mission_id, sheet_json, owner_id")
-      .order("updated_at", { ascending: false });
-
-    if (!characterError && Array.isArray(characterRows)) {
-      const nextCharacters = characterRows.map((item) => ({
-        id: item.id,
-        nome: item.name,
-        missionId: item.mission_id,
-        remote: true,
-      }));
-      const nextSheets = {};
-      characterRows.forEach((item) => {
-        nextSheets[item.id] = item.sheet_json || {};
-      });
-
-      if (nextCharacters.length > 0) {
-        setPlayerCharacters(nextCharacters);
-        setCharacterSheets(nextSheets);
-        setSelectedCharacterId((prev) => prev || nextCharacters[0].id);
-      }
-      setRemoteCharactersReady(true);
-    } else {
-      setRemoteCharactersReady(true);
-    }
+  async function setMissionAccess(profileId, allowed) {
+    const { error } = await supabase.rpc("asa_set_mission_member", { p_mission_id: selectedMission, p_user_id: profileId, p_allowed: allowed });
+    if (error) { setCampaignError("Não foi possível atualizar o acesso à missão."); return; }
+    await loadAdminPanelData();
   }
 
   async function loadAdminPanelData() {
     if (!isDM) return;
     setAdminLoading(true);
-    const [{ data: profiles }, { data: characters }] = await Promise.all([
+    const [{ data: profiles, error: profileFailure }, { data: characters, error: characterFailure }] = await Promise.all([
       supabase.from("profiles").select("id, email, role, nome_personagem").order("email"),
       supabase
         .from("characters")
         .select("id, owner_id, name, mission_id, sheet_json, updated_at")
         .order("updated_at", { ascending: false }),
     ]);
+    const memberResult = await supabase.from("asa_mission_members").select("mission_id, user_id");
+    setMissionMembers(memberResult.data || []);
+    if (profileFailure || characterFailure || memberResult.error) setCampaignError("Falha ao carregar parte do painel administrativo.");
     setAdminProfiles(profiles || []);
     setAdminCharacters(characters || []);
     setAdminLoading(false);
@@ -914,96 +889,24 @@ function AppContent() {
     loadAdminPanelData();
   }
 
-  function parseFlowEvents(logs) {
-    const events = [];
-    for (const log of [...logs].reverse()) {
-      if (!log?.acao || typeof log.acao !== "string") continue;
-      if (!log.acao.startsWith("[FLOW]")) continue;
-      const raw = log.acao.slice(6);
-      try {
-        const event = JSON.parse(raw);
-        events.push({
-          ...event,
-          logCreatedAt: log.created_at ? new Date(log.created_at).getTime() : null,
-        });
-      } catch {
-        // ignora evento inválido
-      }
-    }
-    return events;
-  }
-
-  function computeCombatFlow(logs, currentRound) {
-    const joinedByUser = new Map();
-    let order = [];
-    let done = [];
-    let idx = 0;
-
-    for (const event of parseFlowEvents(logs)) {
-      if (event?.event === "RESET") {
-        joinedByUser.clear();
-        order = [];
-        done = [];
-        idx = 0;
-      }
-      if (event?.event === "JOIN" && event?.payload?.userId) {
-        joinedByUser.set(event.payload.userId, {
-          userId: event.payload.userId,
-          nome: event.payload.nome || "Sem nome",
-          kind: event.payload.kind || "player",
-          monsterId: event.payload.monsterId || null,
-          monster: event.payload.monster || null,
-        });
-      }
-      if (event?.event === "SET_ORDER" && Array.isArray(event?.payload?.order)) {
-        order = event.payload.order;
-        idx = 0;
-        done = [];
-      }
-      if (
-        event?.event === "TURN_DONE" &&
-        event?.payload?.userId &&
-        Number(event?.payload?.round) === Number(currentRound)
-      ) {
-        if (!done.includes(event.payload.userId)) done.push(event.payload.userId);
-        if (order[idx] === event.payload.userId) {
-          idx = Math.min(idx + 1, Math.max(order.length - 1, 0));
-        }
-      }
-      if (
-        event?.event === "ROUND_RESET" &&
-        Number(event?.payload?.round) === Number(currentRound)
-      ) {
-        idx = 0;
-        done = [];
-      }
-    }
-
-    const participants = [...joinedByUser.values()];
-    return { participants, order, done, idx };
-  }
-
   async function emitCombatFlow(event, payload) {
-    await supabase.from("combat_log").insert([
-      {
-        personagem: "SISTEMA FLOW",
-        acao: `[FLOW]${JSON.stringify({ event, payload, at: Date.now() })}`,
-        rodada: rodadaAtual,
-      },
-    ]);
+    return missionCombat.action(event, {
+      ...payload,
+      ...(event === "JOIN" && payload.userId === user.id ? { characterId: selectedCharacterId } : {}),
+    });
   }
 
   async function addMonsterToCombat(monster) {
     if (!isDM || !monster) return;
     const monsterId = `monster:${monster.id}:${Date.now()}`;
-    await emitCombatFlow("JOIN", {
+    if (!(await emitCombatFlow("JOIN", {
       userId: monsterId,
       nome: monster.name,
       kind: "monster",
       monsterId: monster.id,
       monster,
-    });
-    await supabase.from("combat_log").insert([
+    }))) return;
+    await appendCombatLog([
       {
         personagem: "SISTEMA A.S.A.",
         acao: `${monster.name} entrou no combate. VD ${monster.vd || "?"} | Defesa ${
@@ -1016,7 +919,7 @@ function AppContent() {
 
   async function sendMonsterActionToLog(participant, action) {
     if (!isDM || !participant || !action) return;
-    await supabase.from("combat_log").insert([
+    await appendCombatLog([
       {
         personagem: participant.nome,
         acao: `${action.type ? `${action.type} - ` : ""}${action.name}: ${action.text}`,
@@ -1050,15 +953,9 @@ function AppContent() {
     if (!window.confirm("Resetar combate? A rodada, ordem, participantes e timeline visivel voltam ao zero.")) {
       return;
     }
-    setRodadaAtual(1);
-    setCombatParticipants([]);
-    setTurnOrder([]);
-    setTurnDoneBy([]);
-    setTurnIndex(0);
+    if (!(await emitCombatFlow("RESET", { round: 1 }))) return;
     setSelectedOrderDraft([]);
-    await supabase.from("combat_state").update({ rodada: 1 }).eq("id", 1);
-    await emitCombatFlow("RESET", { round: 1 });
-    await supabase.from("combat_log").insert([
+    await appendCombatLog([
       {
         personagem: "SISTEMA A.S.A.",
         acao: "Combate resetado pelo mestre. Mesa limpa e rodada reiniciada.",
@@ -1163,18 +1060,22 @@ function AppContent() {
   }, [selectedMission, selectedCharacterId]);
 
   useEffect(() => {
-    if (!selectedCharacterId || !preMissionReady || !remoteCharactersReady) return;
-    if (isSwitchingCharacterRef.current) return;
-    const snapshot = buildCharacterSnapshot();
-    setCharacterSheets((prev) => ({
-      ...prev,
-      [selectedCharacterId]: snapshot,
-    }));
+    if (!selectedCharacterId || !remoteCharactersReady || prevCharacterIdRef.current === selectedCharacterId) return;
+    const snapshot = characterSheets[selectedCharacterId];
+    if (!snapshot) return;
+    applyCharacterSnapshot(snapshot);
+    prevCharacterIdRef.current = selectedCharacterId;
+    setHydratedCharacterId(selectedCharacterId);
+  }, [selectedCharacterId, remoteCharactersReady, characterSheets]);
 
-    if (!isUuid(selectedCharacterId)) return;
-    const timer = setTimeout(() => persistSelectedCharacterSheet(snapshot), 700);
+  useEffect(() => {
+    if (!selectedCharacterId || !preMissionReady || !remoteCharactersReady || hydratedCharacterId !== selectedCharacterId) return;
+    const snapshot = buildCharacterSnapshot();
+    setCharacterSheets((prev) => ({ ...prev, [selectedCharacterId]: snapshot }));
+    saveQueue.enqueue(selectedCharacterId, snapshot);
+    const timer = setTimeout(() => { void saveQueue.flush(); }, 700);
     return () => clearTimeout(timer);
-  }, [
+  }, [hydratedCharacterId, saveQueue, 
     selectedCharacterId,
     preMissionReady,
     nomePersonagem,
@@ -1202,17 +1103,11 @@ function AppContent() {
   ]);
 
   useEffect(() => {
-    if (!selectedCharacterId || !preMissionReady || !remoteCharactersReady) return;
-    if (prevCharacterIdRef.current === selectedCharacterId) return;
-    const snapshot = characterSheets[selectedCharacterId];
-    prevCharacterIdRef.current = selectedCharacterId;
-    if (!snapshot) return;
-    isSwitchingCharacterRef.current = true;
-    applyCharacterSnapshot(snapshot);
-    setTimeout(() => {
-      isSwitchingCharacterRef.current = false;
-    }, 0);
-  }, [selectedCharacterId, preMissionReady, remoteCharactersReady, characterSheets]);
+    const warn = (event) => { if (saveQueue.hasPending()) { event.preventDefault(); event.returnValue = ""; } };
+    const retry = () => { void saveQueue.flush(); };
+    window.addEventListener("beforeunload", warn); window.addEventListener("online", retry);
+    return () => { window.removeEventListener("beforeunload", warn); window.removeEventListener("online", retry); };
+  }, [saveQueue]);
 
   const categoriasUsadas = useMemo(() => {
     const contagem = { I: 0, II: 0, III: 0, IV: 0 };
@@ -1248,77 +1143,12 @@ function AppContent() {
     return total;
   }, [classe, trilha, nex, attrs.INT, selectedParanormalPowers]);
 
-  // ==========================================
-  // 3. EFEITOS DO SUPABASE (Abaixo dessa linha fica tudo igual)
-  // ==========================================
-
-  useEffect(() => {
-    if (!user) return;
-
-    // Puxa o estado atual ao entrar
-    const carregarMesa = async () => {
-      const { data: st } = await supabase
-        .from("combat_state")
-        .select("rodada")
-        .eq("id", 1)
-        .single();
-      if (st) setRodadaAtual(st.rodada);
-
-      const { data: logs } = await supabase
-        .from("combat_log")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(40);
-      if (logs) setCombatLogs(logs);
-    };
-    carregarMesa();
-
-    // Fica escutando qualquer pessoa atualizando o banco
-    const stateSub = supabase
-      .channel("state-changes")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "combat_state" },
-        (payload) => {
-          setRodadaAtual(payload.new.rodada);
-        }
-      )
-      .subscribe();
-
-    const logSub = supabase
-      .channel("log-inserts")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "combat_log" },
-        (payload) => {
-          setCombatLogs((prev) => [payload.new, ...prev]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(stateSub);
-      supabase.removeChannel(logSub);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    const flow = computeCombatFlow(combatLogs, rodadaAtual);
-    setCombatParticipants(flow.participants);
-    setTurnOrder(flow.order);
-    setTurnDoneBy(flow.done);
-    setTurnIndex(flow.idx);
-  }, [combatLogs, rodadaAtual]);
-
   useEffect(() => {
     if (turnOrder.length > 0) {
       setSelectedOrderDraft(turnOrder);
       return;
     }
-    setSelectedOrderDraft((prev) => {
-      if (prev.length > 0) return prev;
-      return combatParticipants.map((p) => p.userId);
-    });
+    setSelectedOrderDraft(combatParticipants.map((p) => p.userId));
   }, [turnOrder, combatParticipants]);
 
   // Função exclusiva do Mestre
@@ -1337,10 +1167,8 @@ function AppContent() {
       return;
     }
     const prox = rodadaAtual + 1;
-    setRodadaAtual(prox);
-    await supabase.from("combat_state").update({ rodada: prox }).eq("id", 1);
-    await emitCombatFlow("ROUND_RESET", { round: prox });
-    await supabase.from("combat_log").insert([
+    if (!(await emitCombatFlow("ROUND_RESET", { round: prox }))) return;
+    await appendCombatLog([
       {
         personagem: "SISTEMA A.S.A.",
         acao: `A Rodada ${prox} começou!`,
@@ -1350,43 +1178,32 @@ function AppContent() {
   };
 
   useEffect(() => {
+    let disposed = false;
     async function fetchProfiles() {
-      if (!user) return;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, nome_personagem, email");
+      if (!isUuid(selectedMission)) { setAliadosCampanha([]); return; }
+      const { data, error } = await supabase.rpc("asa_mission_roster", { p_mission_id: selectedMission });
 
-      if (!error && data) {
+      if (!disposed && !error && data) {
         const players = data
           .filter((p) => p.id !== user.id)
           .map((p) => ({
             id: p.id,
-            nome: p.nome_personagem || p.email.split("@")[0],
+            nome: p.nome_personagem || "Agente",
           }));
         setAliadosCampanha(players);
 
-        const myProfile = data.find((p) => p.id === user.id);
-        if (myProfile?.nome_personagem) {
-          setNomePersonagem(myProfile.nome_personagem);
-          setPlayerCharacters((prev) => {
-            if (prev.some((c) => c.nome === myProfile.nome_personagem)) return prev;
-            return [
-              ...prev,
-              { id: `char-${Date.now()}-main`, nome: myProfile.nome_personagem },
-            ];
-          });
-        }
       }
     }
     fetchProfiles();
-  }, [user]);
+    return () => { disposed = true; };
+  }, [user.id, selectedMission]);
 
   const handleSalvarNome = async () => {
     if (!user) return;
     const { error } = await supabase.rpc("update_my_profile_name", {
       next_name: nomePersonagem,
     });
-    if (error) console.warn("Falha ao salvar nome do perfil:", error.message);
+    if (error) setCampaignError("Não foi possível salvar o nome do perfil. Confira a conexão e tente novamente.");
   };
 
   useEffect(() => {
@@ -1731,143 +1548,11 @@ function AppContent() {
     setProfileError("");
   }, [origin, classe, classSkillChoices.join("|")]);
 
-  // 💾 SAVE NO LOCALSTORAGE
-  useEffect(() => {
-    // 👇 Impede que o React salve a ficha zerada logo ao abrir a página!
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    const payload = {
-      ownerUserId: user.id,
-      ownerEmail: user.email || "",
-      nex,
-      deslocamento,
-      defArmadura,
-      defOutros,
-      origin,
-      attrs,
-      pvAtual,
-      peAtual,
-      sanAtual,
-      classe,
-      trilha,
-      classSkillChoices,
-      skillStates,
-      selectedPowers,
-      selectedParanormalPowers,
-      rituaisSelecionados,
-      prestigio,
-      inventario,
-      originLocked,
-      setupComplete,
-      selectedMission,
-      playerCharacters,
-      selectedCharacterId,
-      preMissionReady,
-      characterSheets,
-    };
-    localStorage.setItem(storageKey, JSON.stringify(payload));
-  }, [
-    nex,
-    deslocamento,
-    defArmadura,
-    defOutros,
-    origin,
-    attrs,
-    pvAtual,
-    peAtual,
-    sanAtual,
-    classe,
-    trilha,
-    classSkillChoices,
-    skillStates,
-    selectedPowers,
-    selectedParanormalPowers,
-    rituaisSelecionados,
-    prestigio,
-    inventario,
-    originLocked,
-    setupComplete,
-    selectedMission,
-    playerCharacters,
-    selectedCharacterId,
-    preMissionReady,
-    characterSheets,
-    storageKey,
-    user.id,
-    user.email,
-  ]);
-  // 💾 LOAD DO LOCALSTORAGE
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (!saved) return;
-    try {
-      const data = JSON.parse(saved);
-      if (data?.ownerUserId && data.ownerUserId !== user.id) {
-        localStorage.removeItem(storageKey);
-        return;
-      }
-      if (data.nex) {
-        // Evita abrir popup de "up de NEX" ao apenas carregar a ficha salva.
-        prevNexRef.current = data.nex;
-        setNex(data.nex);
-      }
-      if (typeof data.deslocamento === "number")
-        setDeslocamento(data.deslocamento);
-      if (typeof data.defArmadura === "number")
-        setDefArmadura(data.defArmadura);
-      if (typeof data.defOutros === "number") setDefOutros(data.defOutros);
-      if (data.origin) setOrigin(data.origin);
-      if (data.attrs) setAttrs(data.attrs);
-      if (typeof data.pvAtual === "number") setPvAtual(data.pvAtual);
-      if (typeof data.peAtual === "number") setPeAtual(data.peAtual);
-      if (typeof data.sanAtual === "number") setSanAtual(data.sanAtual);
-      if (data.classe) setClasse(data.classe);
-      if (data.trilha) setTrilha(data.trilha);
-      if (Array.isArray(data.classSkillChoices))
-        setClassSkillChoices(data.classSkillChoices);
-      if (typeof data.originLocked === "boolean")
-        setOriginLocked(data.originLocked);
-      if (typeof data.setupComplete === "boolean") {
-        setSetupComplete(data.setupComplete);
-      } else if (typeof data.originLocked === "boolean") {
-        setSetupComplete(data.originLocked);
-      }
-      if (data.skillStates)
-        setSkillStates({ ...createDefaultSkillState(), ...data.skillStates });
-      if (Array.isArray(data.selectedPowers))
-        setSelectedPowers(data.selectedPowers);
-      if (Array.isArray(data.selectedParanormalPowers))
-        setSelectedParanormalPowers(data.selectedParanormalPowers);
-      if (Array.isArray(data.rituaisSelecionados))
-        setRituaisSelecionados(data.rituaisSelecionados);
-
-      // 👈 CARREGANDO INVENTÁRIO
-      if (typeof data.prestigio === "number") setPrestigio(data.prestigio);
-      if (Array.isArray(data.inventario)) setInventario(data.inventario);
-      if (typeof data.selectedMission === "string")
-        setSelectedMission(data.selectedMission);
-      if (Array.isArray(data.playerCharacters) && data.playerCharacters.length) {
-        setPlayerCharacters(data.playerCharacters);
-      }
-      if (typeof data.selectedCharacterId === "string")
-        setSelectedCharacterId(data.selectedCharacterId);
-      if (typeof data.preMissionReady === "boolean")
-        setPreMissionReady(data.preMissionReady);
-      if (data.characterSheets && typeof data.characterSheets === "object") {
-        setCharacterSheets(data.characterSheets);
-      }
-    } catch {
-      /* erro silencioso */
-    }
-  }, [storageKey, user.id]);
-
   if (!preMissionReady) {
     const selectedChar = playerCharacters.find((c) => c.id === selectedCharacterId);
     return (
-      <div style={styles.body}>
+      <div className="with-sync" style={styles.body}>
+        {syncIndicator}
         <button
           onClick={signOut}
           style={{
@@ -1905,14 +1590,18 @@ function AppContent() {
             <h2 style={styles.sectionTitle}>PRÉ-MISSÃO</h2>
             <div style={{ marginBottom: "16px" }}>
               <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>MISSÃO</div>
+              {isDM && <button type="button" onClick={createMission} style={styles.btnStep}>+ Criar missão</button>}
+              {remoteCharactersReady && !missions.length && <p>Você ainda não tem acesso a uma missão. Peça ao mestre para liberar seu acesso.</p>}
+              {!remoteCharactersReady && <button type="button" onClick={loadRemoteCampaignData} style={styles.btnStep}>Tentar carregar campanhas</button>}
               <select
+                aria-label="Missão"
                 value={selectedMission}
                 onChange={(e) => setSelectedMission(e.target.value)}
                 style={styles.selectField}
               >
                 <option value="">Selecione a missão</option>
-                {(missions.length ? missions : MISSIONS_CATALOG.map((name) => ({ id: name, name }))).map((mission) => (
-                  <option key={mission.id || mission.name} value={mission.name || mission}>
+                {missions.map((mission) => (
+                  <option key={mission.id} value={mission.id}>
                     {mission.name || mission}
                   </option>
                 ))}
@@ -1924,8 +1613,9 @@ function AppContent() {
               </div>
               <div style={{ display: "grid", gap: "8px" }}>
                 {playerCharacters.map((character) => (
-                  <div key={character.id} style={{ display: "flex", gap: "8px" }}>
+                  <div key={character.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr auto auto", gap: "8px" }}>
                     <input
+                      aria-label={`Nome do personagem ${character.nome || "sem nome"}`}
                       value={character.nome}
                       onChange={(e) =>
                         setPlayerCharacters((prev) =>
@@ -1935,11 +1625,11 @@ function AppContent() {
                         )
                       }
                       placeholder="Nome do personagem"
-                      style={{ ...styles.selectField, flex: 1 }}
+                      style={{ ...styles.selectField, minWidth: 0, gridColumn: isMobile ? "1 / -1" : undefined }}
                     />
                     <button
                       type="button"
-                      onClick={() => setSelectedCharacterId(character.id)}
+                      onClick={() => { void switchCharacter(character.id); }}
                       style={{
                         ...styles.btnStep,
                         borderColor:
@@ -1961,6 +1651,7 @@ function AppContent() {
                           `Excluir o personagem \"${character.nome || "sem nome"}\"?`
                         );
                         if (!canDelete) return;
+                        if (!(await saveQueue.flush())) return;
                         if (isUuid(character.id)) {
                           const { error } = await supabase
                             .from("characters")
@@ -2007,15 +1698,13 @@ function AppContent() {
                       alert("Você precisa informar um nome.");
                       return;
                     }
+                    if (!(await saveQueue.flush())) return;
                     const created = await createRemoteCharacter(requestedName, selectedMission, createInitialCharacterSnapshot(requestedName));
                     if (created) {
                       setSelectedCharacterId(created.id);
                       return;
                     }
-                    setPlayerCharacters((prev) => [
-                      ...prev,
-                      { id: `char-${Date.now()}-${prev.length}`, nome: requestedName },
-                    ]);
+                    return;
                   }}
                   style={{ ...styles.btnStep }}
                 >
@@ -2031,26 +1720,11 @@ function AppContent() {
                       alert("Você precisa informar um nome para criar personagem.");
                       return;
                     }
-                    isSwitchingCharacterRef.current = true;
-                    resetCharacterDraftDefaults(requestedName);
+                    if (!(await saveQueue.flush())) return;
                     const freshSnapshot = createInitialCharacterSnapshot(requestedName);
                     const created = await createRemoteCharacter(requestedName, selectedMission, freshSnapshot);
-                    const newId = created?.id || `char-${Date.now()}-new`;
-                    if (!created) {
-                      setPlayerCharacters((prev) => [
-                        ...prev,
-                        { id: newId, nome: requestedName },
-                      ]);
-                    }
-                    setSelectedCharacterId(newId);
-                    prevCharacterIdRef.current = newId;
-                    setCharacterSheets((prev) => ({
-                      ...prev,
-                      [newId]: freshSnapshot,
-                    }));
-                    setTimeout(() => {
-                      isSwitchingCharacterRef.current = false;
-                    }, 0);
+                    if (!created) return;
+                    setSelectedCharacterId(created.id);
                     setPreMissionReady(true);
                   }}
                   style={{ ...styles.btnStep, borderColor: colors.brand, color: colors.brand }}
@@ -2070,27 +1744,16 @@ function AppContent() {
                   return;
                 }
                 const chosenName = selectedChar.nome.trim();
-                let nextCharacterId = selectedCharacterId;
-                if (!isUuid(nextCharacterId)) {
-                  const created = await createRemoteCharacter(chosenName, selectedMission, createInitialCharacterSnapshot(chosenName));
-                  if (created?.id) {
-                    nextCharacterId = created.id;
-                    setSelectedCharacterId(created.id);
-                  }
+                if (!(await saveQueue.flush())) return;
+                if (selectedChar.missionId !== selectedMission) {
+                  const { data: assigned, error: assignError } = await supabase.rpc("asa_assign_character_mission", { p_character_id: selectedCharacterId, p_mission_id: selectedMission, p_expected_revision: saveQueue.revisionFor(selectedCharacterId) });
+                  if (assignError) { setCampaignError("Não foi possível vincular o personagem à missão."); return; }
+                  saveQueue.seed(assigned.id, assigned.revision, assigned.sheet_json);
+                  setPlayerCharacters((prev) => prev.map((c) => c.id === assigned.id ? { ...c, missionId: selectedMission } : c));
                 }
+                const { error: nameError } = await supabase.rpc("update_my_profile_name", { next_name: chosenName });
+                if (nameError) { setCampaignError("Não foi possível salvar o nome do perfil."); return; }
                 setNomePersonagem(chosenName);
-                const snapshot = characterSheets[nextCharacterId];
-                if (snapshot) {
-                  isSwitchingCharacterRef.current = true;
-                  applyCharacterSnapshot(snapshot);
-                  setTimeout(() => {
-                    isSwitchingCharacterRef.current = false;
-                  }, 0);
-                }
-                await supabase
-                  .from("profiles")
-                  .update({ nome_personagem: chosenName })
-                  .eq("id", user.id);
                 setActiveTab("status");
                 setPreMissionReady(true);
               }}
@@ -2114,7 +1777,8 @@ function AppContent() {
 
   if (!setupComplete) {
     return (
-      <div style={styles.body}>
+      <div className="with-sync" style={styles.body}>
+        {syncIndicator}
         <button
           onClick={signOut}
           style={{
@@ -2456,7 +2120,8 @@ function AppContent() {
   }
 
   return (
-    <div style={styles.body}>
+    <div className="with-sync" style={styles.body}>
+        {syncIndicator}
       <button
         onClick={signOut}
         style={{
@@ -2567,7 +2232,7 @@ function AppContent() {
       {/* 👆 FIM DA ANIMAÇÃO 👆 */}
       {nexPopup && (
         <div style={styles.popupOverlay}>
-          <div style={styles.popupBox}>
+          <div role="dialog" aria-modal="true" aria-label="Progressão de NEX" data-asa-dialog="nex" tabIndex={-1} style={styles.popupBox}>
             <h3
               style={{
                 marginTop: 0,
@@ -2651,7 +2316,7 @@ function AppContent() {
           }}
           onClick={() => setIsRitualModalOpen(false)}
         >
-          <div
+          <div role="dialog" aria-modal="true" aria-label="Biblioteca arcana" data-asa-dialog="ritual" tabIndex={-1}
             style={{
               ...styles.popupBox,
               width: "100%",
@@ -3688,7 +3353,7 @@ function AppContent() {
                               nomePersonagem || user.email.split("@")[0];
                             const textoAcao = `Usou a habilidade: ${h.nome.toUpperCase()}`;
                             alert(textoAcao);
-                            await supabase.from("combat_log").insert([
+                            await appendCombatLog([
                               {
                                 personagem: pNome,
                                 acao: textoAcao,
@@ -3899,7 +3564,7 @@ function AppContent() {
                               const textoAcao = `Usou o poder: ${poderReal.toUpperCase()}`;
                               alert(textoAcao);
 
-                              await supabase.from("combat_log").insert([
+                              await appendCombatLog([
                                 {
                                   personagem: pNome,
                                   acao: textoAcao,
@@ -4579,7 +4244,7 @@ function AppContent() {
                               alert(textoAcao);
 
                               // 👇 Manda para a Linha do Tempo da mesa 👇
-                              await supabase.from("combat_log").insert([
+                              await appendCombatLog([
                                 {
                                   personagem:
                                     nomePersonagem || user.email.split("@")[0],
@@ -4919,17 +4584,17 @@ function AppContent() {
                     MISSÃO ATIVA
                   </div>
                   <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "10px" }}>
-                    {selectedMission || "Sem missão selecionada"}
+                    {missions.find((m) => m.id === selectedMission)?.name || "Sem missão selecionada"}
                   </div>
                   <button
                     onClick={async () => {
                       if (alreadyJoinedCombat) return;
                       const activeName = getActiveCharacterName();
-                      await emitCombatFlow("JOIN", {
+                      if (!(await emitCombatFlow("JOIN", {
                         userId: user.id,
                         nome: activeName,
-                      });
-                      await supabase.from("combat_log").insert([
+                      }))) return;
+                      await appendCombatLog([
                         {
                           personagem: activeName,
                           acao: "Entrou no combate.",
@@ -4945,7 +4610,7 @@ function AppContent() {
                       opacity: alreadyJoinedCombat ? 0.5 : 1,
                       cursor: alreadyJoinedCombat ? "not-allowed" : "pointer",
                     }}
-                    disabled={alreadyJoinedCombat}
+                    disabled={alreadyJoinedCombat || missionCombat.busy || !missionCombat.state}
                   >
                     {alreadyJoinedCombat ? "Você já entrou no combate" : "Entrar no combate"}
                   </button>
@@ -4972,11 +4637,11 @@ function AppContent() {
                         onClick={async () => {
                           if (turnDoneBy.includes(user.id)) return;
                           if (turnOrder[turnIndex] !== user.id) return;
-                          await emitCombatFlow("TURN_DONE", {
+                          if (!(await emitCombatFlow("TURN_DONE", {
                             userId: user.id,
                             round: rodadaAtual,
-                          });
-                          await supabase.from("combat_log").insert([
+                          }))) return;
+                          await appendCombatLog([
                             {
                               personagem: getActiveCharacterName(),
                               acao: "Finalizou o turno.",
@@ -5012,14 +4677,14 @@ function AppContent() {
                         onClick={async () => {
                           const currentId = turnOrder[turnIndex];
                           if (!currentId || turnDoneBy.includes(currentId)) return;
-                          await emitCombatFlow("TURN_DONE", {
+                          if (!(await emitCombatFlow("TURN_DONE", {
                             userId: currentId,
                             round: rodadaAtual,
-                          });
+                          }))) return;
                           const currentName =
                             combatParticipants.find((p) => p.userId === currentId)?.nome ||
                             "Inimigo";
-                          await supabase.from("combat_log").insert([
+                          await appendCombatLog([
                             {
                               personagem: "SISTEMA A.S.A.",
                               acao: `Mestre encerrou o turno de ${currentName}.`,
@@ -5066,11 +4731,11 @@ function AppContent() {
                           const npcName = npcNameInput.trim();
                           if (!npcName) return;
                           const npcId = `npc:${npcName.toLowerCase().replace(/\s+/g, "-")}:${Date.now()}`;
-                          await emitCombatFlow("JOIN", {
+                          if (!(await emitCombatFlow("JOIN", {
                             userId: npcId,
                             nome: npcName,
-                          });
-                          await supabase.from("combat_log").insert([
+                          }))) return;
+                          await appendCombatLog([
                             {
                               personagem: "SISTEMA A.S.A.",
                               acao: `${npcName} entrou no combate.`,
@@ -5148,10 +4813,10 @@ function AppContent() {
                           alert("Selecione ao menos 1 participante.");
                           return;
                         }
-                        await emitCombatFlow("SET_ORDER", {
+                        if (!(await emitCombatFlow("SET_ORDER", {
                           order: selectedOrderDraft,
-                        });
-                        await supabase.from("combat_log").insert([
+                        }))) return;
+                        await appendCombatLog([
                           {
                             personagem: "SISTEMA A.S.A.",
                             acao: `Ordem definida pelo mestre (${selectedOrderDraft.length} participantes).`,
@@ -6351,6 +6016,10 @@ function AppContent() {
                           <option value="admin">admin</option>
                         </select>
                       </label>
+                      {selectedMission && <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        <input type="checkbox" checked={missionMembers.some((m) => m.user_id === profile.id && m.mission_id === selectedMission)} onChange={(e) => setMissionAccess(profile.id, e.target.checked)} />
+                        Acesso à missão: {missions.find((m) => m.id === selectedMission)?.name}
+                      </label>}
                       <div style={{ ...styles.attrLabel, marginBottom: "8px" }}>
                         PERSONAGENS ({chars.length})
                       </div>
@@ -6403,7 +6072,7 @@ function AppContent() {
               padding: "16px",
             }}
           >
-            <div
+            <div role="dialog" aria-modal="true" aria-label="Detalhes do item" data-asa-dialog="info" tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: "min(760px, 95vw)",
@@ -6506,138 +6175,4 @@ function AppContent() {
     </div>
   );
 }
-
-export default function App() {
-  const { user, loading, passwordRecovery } = useAuth();
-  const [authFeedback, setAuthFeedback] = useState(null);
-
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const hashRaw = window.location.hash.startsWith("#")
-      ? window.location.hash.slice(1)
-      : window.location.hash;
-    const hashParams = new URLSearchParams(hashRaw);
-
-    const authParam = searchParams.get("auth");
-    const errorDescription =
-      searchParams.get("error_description") ||
-      hashParams.get("error_description") ||
-      searchParams.get("error") ||
-      hashParams.get("error");
-    const hashType = hashParams.get("type");
-    const hasSessionToken =
-      Boolean(hashParams.get("access_token")) ||
-      Boolean(hashParams.get("refresh_token"));
-
-    let feedback = null;
-
-    if (errorDescription) {
-      feedback = {
-        type: "error",
-        title: "Falha na confirmação",
-        text: decodeURIComponent(errorDescription).replace(/\+/g, " "),
-      };
-    } else if (authParam === "confirmed" || (hashType === "signup" && hasSessionToken)) {
-      feedback = {
-        type: "success",
-        title: "E-mail confirmado",
-        text: "Sua conta foi confirmada com sucesso. Você já pode entrar no sistema.",
-      };
-    }
-
-    if (feedback) {
-      setAuthFeedback(feedback);
-    }
-    if (feedback || authParam === "recovery" || hashType === "recovery") {
-      const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-      window.history.replaceState({}, document.title, cleanUrl);
-    }
-  }, []);
-
-  if (loading)
-    return (
-      <div
-        style={{
-          color: colors.brand,
-          padding: "40px",
-          textAlign: "center",
-          fontFamily: "monospace",
-        }}
-      >
-        Conectando ao terminal A.S.A...
-      </div>
-    );
-
-  if (passwordRecovery) return <PasswordResetPage />;
-
-  if (authFeedback) {
-    const accent =
-      authFeedback.type === "error"
-        ? "#ff4d4f"
-        : authFeedback.type === "info"
-        ? "#ffd166"
-        : colors.brand;
-
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "24px",
-          background: colors.background,
-          color: colors.text,
-        }}
-      >
-        <div
-          style={{
-            width: "min(560px, 95vw)",
-            border: `1px solid ${accent}66`,
-            boxShadow: "0 0 24px rgba(0,0,0,0.45)",
-            borderRadius: "14px",
-            background: "rgba(17, 17, 21, 0.96)",
-            padding: "20px",
-            fontFamily: "monospace",
-          }}
-        >
-          <h2 style={{ margin: "0 0 10px", color: accent }}>{authFeedback.title}</h2>
-          <p style={{ margin: "0 0 16px", lineHeight: 1.55 }}>{authFeedback.text}</p>
-          <button
-            type="button"
-            onClick={() => setAuthFeedback(null)}
-            style={{
-              border: `1px solid ${accent}66`,
-              background: "transparent",
-              color: "#fff",
-              borderRadius: "10px",
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            Continuar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) return <LoginPage />;
-
-  return <AppContent key={user.id} />;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
 

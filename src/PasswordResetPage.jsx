@@ -8,7 +8,8 @@ export default function PasswordResetPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  async function handleSubmit() {
+  async function handleSubmit(event) {
+    event.preventDefault();
     if (!password || !confirmPassword) {
       alert("Preencha a nova senha e repita a senha.");
       return;
@@ -38,7 +39,7 @@ export default function PasswordResetPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
+      <form onSubmit={handleSubmit} style={styles.card} aria-label="Atualizar senha">
         <div style={styles.glowLine} />
         <h1 style={styles.title}>NOVA SENHA</h1>
         <p style={styles.subtitle}>
@@ -86,7 +87,7 @@ export default function PasswordResetPage() {
         >
           Voltar
         </button>
-      </div>
+      </form>
     </div>
   );
 }

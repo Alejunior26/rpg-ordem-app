@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const AuthContext = createContext();
-const AUTH_BYPASS_ENABLED = process.env.REACT_APP_BYPASS_AUTH === "true";
+const AUTH_BYPASS_ENABLED = import.meta.env.DEV && process.env.REACT_APP_BYPASS_AUTH === "true";
 const DEV_ADMIN_USER = {
   id: "local-dev-admin",
   email: "admin@local.dev",
@@ -49,8 +49,11 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // 🔄 Função centralizada: busca o perfil e TEM que desligar o loading
+    let disposed = false;
+    let requestVersion = 0;
+    let authEventSeen = false;
     const fetchProfileAndStopLoading = async (currentUser) => {
+      const version = ++requestVersion;
       if (!currentUser) {
         setRole("player");
         setLoading(false);
@@ -68,38 +71,43 @@ export function AuthProvider({ children }) {
           console.warn("Aviso ao buscar perfil (pode ignorar):", error.message);
         }
 
-        setRole(normalizeRole(data?.role));
+        if (!disposed && version === requestVersion) setRole(normalizeRole(data?.role));
       } catch (err) {
         console.error("Erro inesperado:", err);
       } finally {
         // 🔥 A MÁGICA AQUI: Não importa o que aconteça, o loading é desligado!
-        setLoading(false);
+        if (!disposed && version === requestVersion) setLoading(false);
       }
     };
 
     // 1. Pega a sessão inicial assim que abre o app
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (disposed || authEventSeen) return;
       if (isPasswordRecoveryUrl()) {
         setPasswordRecovery(true);
       }
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      setUser((previous) => previous?.id === currentUser?.id ? previous : currentUser);
       fetchProfileAndStopLoading(currentUser);
-    });
+    }).catch(() => { if (!disposed && !authEventSeen) { setRole("player"); setLoading(false); } });
 
     // 2. Fica escutando se o cara fez login/logout depois
     const { data: listener } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (disposed) return;
+        authEventSeen = true;
         if (event === "PASSWORD_RECOVERY") {
           setPasswordRecovery(true);
         }
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
+        setUser((previous) => previous?.id === currentUser?.id ? previous : currentUser);
         fetchProfileAndStopLoading(currentUser);
       }
     );
 
     return () => {
+      disposed = true;
+      requestVersion += 1;
       if (listener?.subscription) {
         listener.subscription.unsubscribe();
       }
@@ -115,7 +123,6 @@ export function AuthProvider({ children }) {
       return { data: { user: DEV_ADMIN_USER }, error: null };
     }
 
-    setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -133,7 +140,6 @@ export function AuthProvider({ children }) {
       return { data: { user: DEV_ADMIN_USER, session: null }, error: null };
     }
 
-    setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -156,7 +162,6 @@ export function AuthProvider({ children }) {
       return { error: null };
     }
 
-    setLoading(true);
     const { error } = await supabase.auth.signOut();
     if (!error) {
       setUser(null);
