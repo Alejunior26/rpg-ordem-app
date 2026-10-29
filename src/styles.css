@@ -1,4 +1,15 @@
-.App {
-  font-family: sans-serif;
-  text-align: center;
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; min-height: 100%; background: #050507; }
+body { color: #eee; }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 3px solid #00e5ff !important; outline-offset: 3px;
 }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.field-label { display: block; margin: 8px 0; font-size: 13px; color: #d7e4e8; }
+.auth-feedback { padding: 12px; line-height: 1.5; color: #fff; border: 1px solid #659aa5; border-radius: 8px; }
+.sync-status { position: fixed; bottom: 8px; left: 8px; right: 8px; z-index: 10000; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #111923; border: 1px solid #456; padding: 8px 12px; font: 12px sans-serif; border-radius: 8px; }
+.sync-status span { flex: 1; min-width: 160px; }
+.sync-status button { background: #1b3440; border: 1px solid #678; color: #fff; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+.with-sync { padding-bottom: 80px !important; }
+@media(max-width:520px) { .with-sync { padding-bottom: 120px !important; } }
