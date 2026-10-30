@@ -22,6 +22,7 @@ function BoardContent({
   busy = false,
   selectedId,
   activeTokenId,
+  tokenArtScale = 2.5,
   onSelect = () => {},
   onMove,
   onFog,
@@ -54,10 +55,11 @@ function BoardContent({
         </p>
       </div>
     );
+  const position = (token) => draft?.id === token.id ? draft : token;
   const shown = tokens.filter(
     (t) =>
       !t.deleted && ((manager && !preview) || tokenIsVisible(t, scene, tokens)),
-  );
+  ).sort((a, b) => position(a).y + a.size / 2 - position(b).y - b.size / 2);
   function point(event) {
     const rect = svg.current.getBoundingClientRect();
     if (
@@ -304,6 +306,13 @@ function BoardContent({
         const p = draft?.id === token.id ? draft : token,
           movable = canMoveToken(token, scene, userId, manager, preview),
           image = images[token.image_path] || token.image_url;
+        const foot = token.size * CELL / 2;
+        const artHeight = token.size * CELL * Math.max(1, Math.min(4, Number(tokenArtScale) || 2.5));
+        const artWidth = artHeight * 0.72;
+        const Base = image ? "ellipse" : "circle";
+        const baseShape = image
+          ? { rx: token.size * CELL * 0.47, ry: token.size * CELL * 0.18 }
+          : { r: token.size * CELL * 0.47 };
         return (
           <g
             key={token.id}
@@ -329,11 +338,12 @@ function BoardContent({
             onKeyDown={(e) => keyMove(e, token)}
           >
             <title>{token.name}</title>
-            {activeTokenId === token.id && <circle className="vt-turn-ring" aria-label="Turno atual" cx={token.size * CELL / 2} cy={token.size * CELL / 2} r={token.size * CELL * 0.55} fill="none" stroke="#8fe4dc" strokeWidth="3" strokeDasharray="6 5" pointerEvents="none" />}
-            <circle
+            {activeTokenId === token.id && <Base className="vt-turn-ring" aria-label="Turno atual" cx={foot} cy={foot} {...(image ? { rx: token.size * CELL * 0.55, ry: token.size * CELL * 0.25 } : { r: token.size * CELL * 0.55 })} fill="none" stroke="#8fe4dc" strokeWidth="3" strokeDasharray="6 5" pointerEvents="none" />}
+            <Base
+              className="vt-token-base"
               cx={(token.size * CELL) / 2}
               cy={(token.size * CELL) / 2}
-              r={token.size * CELL * 0.47}
+              {...baseShape}
               fill="#111520"
               fillOpacity={image ? 0.25 : 1}
               stroke={selectedId === token.id ? "#ffffff" : token.color}
@@ -344,13 +354,14 @@ function BoardContent({
             />
             {image ? (
               <image
+                className="vt-token-image"
                 href={image}
-                x={CELL * 0.06}
-                y={CELL * 0.02}
-                width={CELL * (token.size - 0.12)}
-                height={CELL * (token.size - 0.08)}
-                preserveAspectRatio="xMidYMid meet"
-                pointerEvents="none"
+                x={foot - artWidth / 2}
+                y={foot - artHeight}
+                width={artWidth}
+                height={artHeight}
+                preserveAspectRatio="xMidYMax meet"
+                pointerEvents="visiblePainted"
               />
             ) : (
               <text

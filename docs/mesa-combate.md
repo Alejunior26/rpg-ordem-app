@@ -1,5 +1,16 @@
 # Combate junto ao mapa
 
+A coluna esquerda reúne o mapa, as ferramentas logo abaixo dele, as opções da
+cena, os tokens e a preparação. A lateral direita fica reservada ao combate,
+com rolagem independente. Em telas pequenas, o combate vem logo depois do mapa,
+seguido pelas opções e pela preparação.
+
+As artes funcionam como miniaturas em pé: a base marca o espaço ocupado no chão,
+e a imagem inteira se estende para cima, ancorada no centro dessa base. O controle
+“Miniaturas” ajusta a escala visual desta visualização, inicialmente em 2,5×,
+sem mudar posição, tamanho de ocupação, movimento ou visão por salas. O arrasto
+pelo corpo mantém o ponto de apoio; a ordem de desenho usa a posição dos pés.
+
 A aba Mesa recebe a mesma instância de `useMissionCombat` de `CharacterApp`.
 Alternar para Combate não recria a assinatura; a missão continua sendo a unidade
 persistente. O painel não possui um segundo motor nem cria participantes pelo mapa.

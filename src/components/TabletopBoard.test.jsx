@@ -52,6 +52,40 @@ function mapBounds(board, scale = 1) {
   board.releasePointerCapture = vi.fn();
 }
 describe("shared map interaction", () => {
+  it("anchors full-height artwork at the feet while visual scale leaves the occupied cell unchanged", () => {
+    const props = { scene, tokens: [{ ...token, image_url: "https://example.com/agent.png" }] };
+    const { rerender } = render(<TabletopBoard {...props} />);
+    const piece = screen.getByRole("button"), art = piece.querySelector("image"), base = piece.querySelector(".vt-token-base");
+    const feet = () => Number(art.getAttribute("y")) + Number(art.getAttribute("height"));
+    expect(Number(art.getAttribute("height"))).toBeGreaterThan(64 * 2);
+    expect(feet()).toBe(32);
+    expect(Number(art.getAttribute("x")) + Number(art.getAttribute("width")) / 2).toBe(32);
+    expect(art.getAttribute("preserveAspectRatio")).toBe("xMidYMax meet");
+    const footprint = base.outerHTML;
+    rerender(<TabletopBoard {...props} tokenArtScale={4} />);
+    expect(feet()).toBe(32);
+    expect(Number(art.getAttribute("height"))).toBe(256);
+    expect(base.outerHTML).toBe(footprint);
+    expect(piece.getAttribute("transform")).toBe("translate(128 128)");
+  });
+  it("drags by the body above its grid cell without making the feet jump to the cursor", () => {
+    const move = vi.fn();
+    render(<TabletopBoard scene={scene} userId="a" tokens={[{ ...token, image_url: "https://example.com/agent.png" }]} onMove={move} />);
+    const board = screen.getByRole("application"), piece = screen.getByRole("button");
+    mapBounds(board);
+    pointer(piece.querySelector("image"), "pointerdown", 225, 100);
+    pointer(board, "pointermove", 325, 250);
+    expect(piece.getAttribute("transform")).toBe("translate(256 320)");
+    pointer(board, "pointerup", 325, 250);
+    expect(move).toHaveBeenCalledWith(expect.objectContaining({ id: token.id }), { x: 4, y: 5 });
+  });
+  it("draws the miniature with lower feet in front when artwork overlaps", () => {
+    const { container } = render(<TabletopBoard scene={scene} tokens={[
+      { ...token, id: "front", name: "Frente", y: 4 },
+      { ...token, id: "back", name: "Fundo", y: 2 },
+    ]} />);
+    expect([...container.querySelectorAll(".vt-token")].map((piece) => piece.getAttribute("aria-label"))).toEqual(["Fundo", "Frente"]);
+  });
   it("reveals only occupied rooms and covers them when the last character leaves, including GM preview", () => {
     const explored = {
       ...scene,
