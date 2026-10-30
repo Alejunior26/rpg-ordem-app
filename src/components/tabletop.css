@@ -618,6 +618,10 @@
 .vt-combat small { color: #a4a6bd; font-size: 11px; }
 .vt-combat-controls { display: grid; gap: 6px; }
 .vt-combat-turn { font-size: 13px; color: #8fe4dc; }
+.vt-combat-mode { color: #c6a2f5; font-size: 11px; margin: 0 0 12px; }
+.vt-combat-direction > .vt-action-content { max-height: none; overflow: visible; }
+.vt-combat-direction .combat-direction-controls > div { padding: 10px !important; margin-bottom: 12px !important; }
+.vt-combat-direction input, .vt-combat-direction select { min-width: 0 !important; }
 .vt-history-list { max-height: 330px; overflow: auto; }
 .vt-history-list li { border-left: 2px solid #7757a5; padding: 8px; margin: 8px 0; background: #080a1466; overflow-wrap: anywhere; }
 .vt-history-list strong, .vt-history-list small { display: block; }
