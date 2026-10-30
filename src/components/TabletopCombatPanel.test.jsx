@@ -32,6 +32,14 @@ it('disables ending someone else’s turn, reports error and pending state',()=>
   expect(screen.getByText('A mesa mudou')).toBeTruthy();expect(screen.getByText('Salvando ação…')).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Reconectar combate'}));expect(props.combat.refresh).toHaveBeenCalledOnce();
 });
+it('labels another player’s current turn without telling the viewer it is their turn',()=>{
+  const props=fixture({userId:'another-player'});
+  render(<TabletopView {...props}/>);
+  const initiative=screen.getByRole('list',{name:'Ordem de iniciativa'});
+  expect(within(initiative).getByText('Em turno')).toBeTruthy();
+  expect(within(initiative).queryByText('Sua vez')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Finalizar meu turno'})).toBeNull();
+});
 it('gives the master commands but removes them and all hidden content in preview, restoring view on exit',()=>{
   const props=fixture({manager:true});const {container}=render(<TabletopView {...props}/>);
   const finish=screen.getByRole('button',{name:'Encerrar turno atual (Mestre)'});fireEvent.click(finish);expect(props.onFinishCurrentTurn).toHaveBeenCalledOnce();

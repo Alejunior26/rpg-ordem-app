@@ -2239,6 +2239,7 @@ export default function AppContent() {
             </div>
 
             <div
+              className="asa-attributes"
               style={{
                 ...styles.mandalaContainer,
                 width: `${mandalaSize}px`,
@@ -2246,6 +2247,7 @@ export default function AppContent() {
               }}
             >
               <div
+                className="asa-attribute-symbol"
                 style={{
                   ...styles.centralSymbol,
                   width: `${mandalaSize}px`,
@@ -2278,6 +2280,7 @@ export default function AppContent() {
                 return (
                   <div
                     key={key}
+                    className="asa-attribute-node"
                     style={{
                       ...styles.attributeNode,
                       width: `${nodeSize}px`,

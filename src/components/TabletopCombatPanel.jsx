@@ -26,7 +26,7 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
           const token = participantToken(p, scene, tokens, privileged);
           return <li key={p.userId} aria-current={p.userId === view.currentId ? 'step' : undefined}>
             <button type="button" disabled={!token} onClick={() => token && onFocusToken(token)} aria-label={`Localizar ${p.nome} no mapa`}>{p.nome}</button>
-            <small>{done.includes(p.userId) ? 'Já agiu' : p.userId === view.currentId ? 'Sua vez' : 'Aguardando'}</small>
+            <small>{done.includes(p.userId) ? 'Já agiu' : p.userId === view.currentId ? p.userId === userId ? 'Sua vez' : 'Em turno' : 'Aguardando'}</small>
           </li>;
         })}
       </ol>

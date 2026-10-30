@@ -572,9 +572,12 @@
 .vt-history-list strong, .vt-history-list small { display: block; }
 .vt-history-list p { white-space: pre-wrap; font-size: 12px; line-height: 1.5; margin: 6px 0; }
 .vt-action-content { border: 0; padding: 0; margin: 8px 0; min-width: 0; max-height: 65vh; overflow: auto; }
-.vt-action-content > div { width: 100% !important; min-width: 0 !important; padding: 0 !important; box-sizing: border-box; }
+.vt-action-content > fieldset > div { width: 100% !important; min-width: 0 !important; padding: 0 !important; box-sizing: border-box; }
 .vt-action-content * { box-sizing: border-box; }
 .vt-action-content input, .vt-action-content select, .vt-action-content textarea { max-width: 100%; }
+.vt-action-content .asa-attributes { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100% !important; height: auto !important; border-radius: 0; box-shadow: none !important; }
+.vt-action-content .asa-attribute-symbol { display: none !important; }
+.vt-action-content .asa-attribute-node { position: static !important; transform: none !important; width: auto !important; height: auto !important; min-height: 70px; border-radius: 10px !important; }
 .vt-action-drawer[open] { position: relative; }
 @media (min-width: 1101px) {
   .vt-sidebar:has(.vt-combat) { width: 340px; }
