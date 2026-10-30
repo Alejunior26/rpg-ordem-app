@@ -45,6 +45,7 @@ import { useMissionCombat } from "./hooks/useMissionCombat";
 import { createCharacterSaveQueue } from "./services/characterStore";
 import SyncStatus from "./components/SyncStatus";
 import { canManageTable, isUuid, normalizeRole } from "./domain/roles";
+const VirtualTabletop = React.lazy(() => import('./components/VirtualTabletop'));
 
 const EMPTY_COMBAT_LIST = [];
 
@@ -169,6 +170,8 @@ const styles = {
     backdropFilter: "blur(10px)",
     position: "fixed",
     height: "100vh",
+    overflowY: "auto",
+    overflowX: "hidden",
   },
   navBtn: {
     background: "none",
@@ -1054,10 +1057,10 @@ export default function AppContent() {
   }, [selectedCharacterId, playerCharacters]);
 
   useEffect(() => {
-    if (!selectedMission || !selectedCharacterId) {
+    if (!selectedMission || (!selectedCharacterId && !(isDM && activeTab === 'mesa'))) {
       setPreMissionReady(false);
     }
-  }, [selectedMission, selectedCharacterId]);
+  }, [selectedMission, selectedCharacterId, isDM, activeTab]);
 
   useEffect(() => {
     if (!selectedCharacterId || !remoteCharactersReady || prevCharacterIdRef.current === selectedCharacterId) return;
@@ -1768,6 +1771,7 @@ export default function AppContent() {
             >
               Confirmar missão e personagem
             </button>
+            {isDM && <button type="button" disabled={!isUuid(selectedMission)} onClick={async()=>{if(await saveQueue.flush()){setActiveTab('mesa');setPreMissionReady(true);}}} style={{...styles.btnStep,width:'100%',marginTop:12,borderColor:'#b990ee',color:'#dfc6ff'}}>Abrir mesa virtual como mestre</button>}
           </div>
         </div>
         </div>
@@ -1775,7 +1779,7 @@ export default function AppContent() {
     );
   }
 
-  if (!setupComplete) {
+  if (!setupComplete && !(isDM && activeTab === 'mesa')) {
     return (
       <div className="with-sync" style={styles.body}>
         {syncIndicator}
@@ -2635,6 +2639,9 @@ export default function AppContent() {
         >
           <TabGlyph tab="combate" active={activeTab === "combate"} />
         </button>
+        <button type="button" onClick={()=>setActiveTab('mesa')} title="Mesa virtual" aria-label="Mesa virtual" aria-current={activeTab==='mesa'?'page':undefined} style={{...styles.navBtn,color:activeTab==='mesa'?'#c6a2f5':'#777'}}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16M15 5v16"/><circle cx="12" cy="11" r="2"/></svg>
+        </button>
         {isDM && (
           <button
             onClick={() => setActiveTab("admin")}
@@ -2655,10 +2662,11 @@ export default function AppContent() {
           ...styles.mainContent,
           marginLeft: isMobile ? "58px" : "74px",
           width: isMobile ? "calc(100% - 58px)" : "calc(100% - 74px)",
-          padding: isMobile ? "12px" : "20px",
+          padding: activeTab === 'mesa' ? (isMobile ? '62px 12px 12px' : '70px 20px 20px') : (isMobile ? "12px" : "20px"),
         }}
       >
         {/* ABA 1: STATUS (BIO-MONITOR) */}
+        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} round={rodadaAtual} currentTurn={combatParticipants.find(p=>p.userId===turnOrder[missionCombat.state?.turn_index||0])?.nome}/></React.Suspense>}
         {activeTab === "status" && (
           <div style={styles.container}>
             <div style={{ textAlign: "center", marginBottom: "10px" }}>
