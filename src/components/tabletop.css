@@ -154,17 +154,19 @@
   user-select: none;
   max-height: none;
 }
+.vt-board image {
+  -webkit-user-drag: none;
+}
 .vt-tool-fog,
 .vt-tool-ruler {
   cursor: crosshair;
 }
-.vt-token:focus-visible {
+.vt-token:focus {
   outline: none;
-  filter: drop-shadow(0 0 0.05px #fff);
 }
 .vt-token:focus-visible circle {
   stroke: #fff;
-  stroke-width: 0.09;
+  stroke-width: 6;
 }
 .vt-map-footer {
   display: flex;
@@ -342,6 +344,9 @@
   gap: 18px;
   margin-top: 20px;
   align-items: start;
+}
+.vt-preparation[hidden] {
+  display: none;
 }
 .vt-card summary {
   font-size: 13px;
