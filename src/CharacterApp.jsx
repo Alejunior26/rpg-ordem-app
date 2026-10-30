@@ -2,6 +2,8 @@ import { useAuth } from "./auth/AuthProvider";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { asaBestiary } from "./data/asaBestiary";
+import ActionConditions from "./components/ActionConditions";
+import { resolveCombatMonster } from "./lib/combatBestiary";
 
 import {
   ATTR_KEYS,
@@ -2315,11 +2317,7 @@ export default function AppContent() {
         {combatParticipants
           .filter((participant) => participant.kind === "monster")
           .map((participant) => {
-            const monster =
-              participant.monster ||
-              bestiaryEntries.find(
-                (entry) => entry.id === participant.monsterId
-              );
+            const monster = resolveCombatMonster(participant, bestiaryEntries);
             return (
               <div
                 key={participant.userId}
@@ -2338,6 +2336,7 @@ export default function AppContent() {
                   }}
                 >
                   {participant.nome}
+                  {monster?.rulesVersion === 6 && <span style={{ display: "block", color: "#9ca3af", fontSize: "11px", fontWeight: "normal", marginTop: "4px" }}>Ficha v6 · Condições de Ordem 1.3</span>}
                 </div>
                 <div style={{ display: "grid", gap: "6px" }}>
                   {(monster?.actions || []).map((action, index) => (
@@ -2359,6 +2358,7 @@ export default function AppContent() {
                           ? action.text
                           : "Descrição não cadastrada para esta ação."}
                       </p>
+                      <ActionConditions ids={action.condition_ids} />
                       <button
                         type="button"
                         aria-label={`Usar ${action.name} de ${participant.nome}`}
@@ -5888,6 +5888,7 @@ export default function AppContent() {
                               <div style={{ color: "#aaa", fontSize: "12px", marginTop: "4px" }}>
                                 {action.text}
                               </div>
+                              <ActionConditions ids={action.condition_ids} />
                             </div>
                           ))}
                         </div>
