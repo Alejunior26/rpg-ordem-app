@@ -14,7 +14,7 @@ function fixture(overrides={}) {
   const combat={state:{mission_id:'mission',rodada:2,participants:[player,enemy],turn_order:['owner','monster:1'],turn_index:0,turn_done_by:[]},logs:[{id:1,author_id:'owner',personagem:'Alice',acao:'Usou habilidade',rodada:2},{id:2,author_id:'gm',personagem:enemy.nome,acao:'Ataque secreto',rodada:2},{id:3,author_id:'owner',personagem:'Alice',acao:`Atacou ${enemy.nome}`,rodada:2}],busy:false,error:'',refresh:vi.fn(),...overrides.combat};
   return {missionId:'mission',userId:'owner',character:{id:'char'},manager:false,
     table:{scenes:[scene],tokens:[token,secret],assets:[],images:{},room:{active_scene_id:'scene'},loading:false,busy:false,updateToken:vi.fn(),updateScene:vi.fn()},
-    onJoinCombat:vi.fn(),onFinishOwnTurn:vi.fn(),onFinishCurrentTurn:vi.fn(),onAdvanceRound:vi.fn(),renderCharacterPanel:vi.fn(()=><input aria-label="Ficha compartilhada"/>),...overrides,combat};
+    onJoinCombat:vi.fn(),onFinishOwnTurn:vi.fn(),onFinishCurrentTurn:vi.fn(),onAdvanceRound:vi.fn(),renderCharacterPanel:vi.fn(()=><input aria-label="Ficha compartilhada"/>),renderCombatDirection:vi.fn(()=><button>Adicionar ameaça de teste</button>),...overrides,combat};
 }
 it('shows safe player initiative/history, highlights and focuses the unique visible token without moving it',()=>{
   const props=fixture();const {container}=render(<TabletopView {...props}/>);
@@ -24,6 +24,7 @@ it('shows safe player initiative/history, highlights and focuses the unique visi
   expect(container.querySelector('.vt-token.selected').textContent).toContain('Alice');expect(props.table.updateToken).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Finalizar meu turno'}));expect(props.onFinishOwnTurn).toHaveBeenCalledOnce();
   expect(screen.queryByText('Encerrar turno atual (Mestre)')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Adicionar ameaça de teste'})).toBeNull();
 });
 it('disables ending someone else’s turn, reports error and pending state',()=>{
   const props=fixture({combat:{state:{rodada:2,participants:[player,enemy],turn_order:['monster:1','owner'],turn_index:0,turn_done_by:[]},busy:true,error:'A mesa mudou'}});
@@ -43,15 +44,19 @@ it('labels another player’s current turn without telling the viewer it is thei
 it('gives the master commands but removes them and all hidden content in preview, restoring view on exit',()=>{
   const props=fixture({manager:true});const {container}=render(<TabletopView {...props}/>);
   const finish=screen.getByRole('button',{name:'Encerrar turno atual (Mestre)'});fireEvent.click(finish);expect(props.onFinishCurrentTurn).toHaveBeenCalledOnce();
+  expect(screen.getByText('Direção do combate (Mestre)').closest('details').open).toBe(true);
+  expect(screen.getByRole('button',{name:'Adicionar ameaça de teste'})).toBeTruthy();
   expect(screen.getByRole('button',{name:'Avançar rodada'}).disabled).toBe(true);
   fireEvent.change(screen.getByLabelText('Zoom do mapa'),{target:{value:'200'}});
   fireEvent.click(screen.getByRole('button',{name:'Localizar Segredo inominável no mapa'}));
   expect(screen.queryByText('Ataque secreto')).toBeTruthy();
   fireEvent.click(screen.getByLabelText('Prévia dos jogadores'));
   expect(screen.queryByRole('button',{name:'Encerrar turno atual (Mestre)'})).toBeNull();expect(screen.queryByText('Ações e ficha na mesa')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Adicionar ameaça de teste'})).toBeNull();
   expect(screen.queryByText('Ataque secreto')).toBeNull();expect(screen.queryByText(enemy.nome)).toBeNull();
   expect(screen.queryByRole('button',{name:'Finalizar meu turno'})).toBeNull();
-  fireEvent.click(screen.getByLabelText('Prévia dos jogadores'));
+  fireEvent.click(screen.getByRole('button',{name:'Voltar à visão do mestre'}));
+  expect(screen.getByLabelText('Prévia dos jogadores').checked).toBe(false);
   expect(screen.getByLabelText('Zoom do mapa').value).toBe('200');expect(screen.getByRole('button',{name:'Encerrar turno atual (Mestre)'})).toBeTruthy();
 });
 it('advances only a finished round; opens shared actions in the table',()=>{
@@ -60,6 +65,15 @@ it('advances only a finished round; opens shared actions in the table',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Avançar rodada'}));expect(props.onAdvanceRound).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByText('Ações e ficha na mesa'));fireEvent.change(screen.getByLabelText('Área de ação'),{target:{value:'inventario'}});
   expect(props.renderCharacterPanel).toHaveBeenLastCalledWith('inventario');expect(screen.getByLabelText('Ficha compartilhada')).toBeTruthy();
+});
+it('lets the master leave preview even while combat is unavailable',()=>{
+  const props=fixture({manager:true,combat:{state:null,error:'Sem conexão com o combate'}});
+  render(<TabletopView {...props}/>);
+  fireEvent.click(screen.getByLabelText('Prévia dos jogadores'));
+  expect(screen.queryByRole('button',{name:'Adicionar ameaça de teste'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Voltar à visão do mestre'}));
+  expect(screen.getByLabelText('Prévia dos jogadores').checked).toBe(false);
+  expect(screen.getByText('Visão do mestre')).toBeTruthy();
 });
 it('does not guess by name or choose among multiple owned tokens; hidden token cannot be focused or highlighted for players',()=>{
   expect(participantToken(player,scene,[token,{...token,id:'second',visible:false}],false)).toBeNull();

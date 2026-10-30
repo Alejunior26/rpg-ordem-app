@@ -16,9 +16,15 @@ Alternar para Combate não recria a assinatura; a missão continua sendo a unida
 persistente. O painel não possui um segundo motor nem cria participantes pelo mapa.
 
 O painel permite entrar, finalizar o próprio turno e, para o mestre, encerrar o
-turno corrente e avançar após todos agirem. A gaveta “Ações e ficha na mesa”
-renderiza os mesmos controles das abas de recursos, habilidades, perícias,
-rituais, inventário e direção do combate. Não adiciona novas regras de dados,
+turno corrente e avançar após todos agirem. A seção “Direção do combate (Mestre)”
+fica aberta por padrão e reúne NPCs, monstros, ordem, reset e ações das ameaças,
+inclusive quando o mestre não selecionou uma ficha pessoal. Esses controles são
+os mesmos da aba Combate e ficam ocultos para jogadores e na prévia.
+Durante a prévia, “Voltar à visão do mestre” restaura a visão e os controles
+diretamente no painel de combate.
+A gaveta “Ações e ficha na mesa” fica reservada ao personagem selecionado e
+renderiza recursos, habilidades, perícias, rituais e inventário.
+Não adiciona novas regras de dados,
 movimento ou gasto de ações. Um ritual só desconta PE depois da confirmação do
 log; respostas antigas não alteram os recursos de outro personagem.
 

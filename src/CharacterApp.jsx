@@ -2151,6 +2151,222 @@ export default function AppContent() {
     }]);
   }
 
+  function renderCombatDirection() {
+    if (!isDM) return null;
+    return <div className="combat-direction-controls">
+  {isDM && (
+    <div
+      style={{
+        marginBottom: "20px",
+        border: `1px solid ${colors.border}`,
+        borderRadius: "10px",
+        padding: "10px",
+        textAlign: "left",
+      }}
+    >
+      <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+        ORDEM DE TURNO (MESTRE)
+      </div>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+        <input
+          value={npcNameInput}
+          onChange={(e) => setNpcNameInput(e.target.value)}
+          placeholder="Nome do monstro/NPC"
+          style={{ ...styles.selectField, padding: "8px", flex: 1 }}
+        />
+        <button
+          onClick={async () => {
+            const npcName = npcNameInput.trim();
+            if (!npcName) return;
+            const npcId = `npc:${npcName.toLowerCase().replace(/\s+/g, "-")}:${Date.now()}`;
+            if (!(await emitCombatFlow("JOIN", {
+              userId: npcId,
+              nome: npcName,
+            }))) return;
+            await appendCombatLog([
+              {
+                personagem: "SISTEMA A.S.A.",
+                acao: `${npcName} entrou no combate.`,
+                rodada: rodadaAtual,
+              },
+            ]);
+            setNpcNameInput("");
+          }}
+          style={{ ...styles.btnStep, whiteSpace: "nowrap" }}
+        >
+          + NPC
+        </button>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+          gap: "8px",
+          marginBottom: "10px",
+        }}
+      >
+        <select
+          value={selectedBestiary?.id || ""}
+          onChange={(e) => setSelectedBestiaryId(e.target.value)}
+          style={{ ...styles.selectField, padding: "8px" }}
+        >
+          {bestiaryEntries.map((monster) => (
+            <option key={monster.id} value={monster.id}>
+              VD {monster.vd || "?"} - {monster.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => addMonsterToCombat(selectedBestiary)}
+          style={{
+            ...styles.btnStep,
+            whiteSpace: "nowrap",
+            borderColor: colors.brand,
+            color: colors.brand,
+          }}
+        >
+          + Monstro
+        </button>
+      </div>
+      {!combatParticipants.length && <p style={{ color: "#9ca3af", fontSize: "12px", lineHeight: 1.5 }}>Adicione um NPC ou monstro acima. Os jogadores entram com as próprias fichas.</p>}
+      <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
+        {combatParticipants.map((p) => (
+          <label
+            key={p.userId}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "#d1d5db",
+              fontSize: "12px",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selectedOrderDraft.includes(p.userId)}
+              onChange={() =>
+                setSelectedOrderDraft((prev) =>
+                  prev.includes(p.userId)
+                    ? prev.filter((id) => id !== p.userId)
+                    : [...prev, p.userId]
+                )
+              }
+            />
+            {p.nome}
+          </label>
+        ))}
+      </div>
+      <button
+        disabled={missionCombat.busy || missionCombat.logBusy || !missionCombat.state || !selectedOrderDraft.length}
+        onClick={async () => {
+          if (!selectedOrderDraft.length) {
+            alert("Selecione ao menos 1 participante.");
+            return;
+          }
+          if (!(await emitCombatFlow("SET_ORDER", {
+            order: selectedOrderDraft,
+          }))) return;
+          await appendCombatLog([
+            {
+              personagem: "SISTEMA A.S.A.",
+              acao: `Ordem definida pelo mestre (${selectedOrderDraft.length} participantes).`,
+              rodada: rodadaAtual,
+            },
+          ]);
+        }}
+        style={{
+          ...styles.btnStep,
+          width: "100%",
+          borderColor: colors.brand,
+          color: colors.brand,
+        }}
+      >
+        Definir ordem selecionada
+      </button>
+      <button
+        onClick={resetCombatTable}
+        style={{
+          ...styles.btnStep,
+          width: "100%",
+          marginTop: "8px",
+          borderColor: colors.pv,
+          color: colors.pv,
+        }}
+      >
+        Resetar combate
+      </button>
+    </div>
+  )}
+
+  {isDM && combatParticipants.some((p) => p.kind === "monster") && (
+    <div
+      style={{
+        marginBottom: "20px",
+        border: `1px solid ${colors.border}`,
+        borderRadius: "10px",
+        padding: "10px",
+        textAlign: "left",
+      }}
+    >
+      <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
+        ACOES DE MONSTROS
+      </div>
+      <div style={{ display: "grid", gap: "10px" }}>
+        {combatParticipants
+          .filter((participant) => participant.kind === "monster")
+          .map((participant) => {
+            const monster =
+              participant.monster ||
+              bestiaryEntries.find(
+                (entry) => entry.id === participant.monsterId
+              );
+            return (
+              <div
+                key={participant.userId}
+                style={{
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: "8px",
+                  padding: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#fff",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {participant.nome}
+                </div>
+                <div style={{ display: "grid", gap: "6px" }}>
+                  {(monster?.actions || []).map((action, index) => (
+                    <button
+                      key={`${participant.userId}-${action.name}-${index}`}
+                      onClick={() =>
+                        sendMonsterActionToLog(participant, action)
+                      }
+                      style={{
+                        ...styles.btnStep,
+                        textAlign: "left",
+                        borderColor: colors.brand,
+                        color: "#d1d5db",
+                      }}
+                    >
+                      {action.type} - {action.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  )}
+
+    </div>;
+  }
+
   function renderCharacterPanel(actionTab) {
     return <fieldset disabled={missionCombat.busy || missionCombat.logBusy} style={{border: 0, padding: 0, margin: 0, minWidth: 0}}>
         {actionTab === "status" && (
@@ -3896,213 +4112,7 @@ export default function AppContent() {
                   </div>
                 )}
 
-                {isDM && (
-                  <div
-                    style={{
-                      marginBottom: "20px",
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: "10px",
-                      padding: "10px",
-                      textAlign: "left",
-                    }}
-                  >
-                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
-                      ORDEM DE TURNO (MESTRE)
-                    </div>
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-                      <input
-                        value={npcNameInput}
-                        onChange={(e) => setNpcNameInput(e.target.value)}
-                        placeholder="Nome do monstro/NPC"
-                        style={{ ...styles.selectField, padding: "8px", flex: 1 }}
-                      />
-                      <button
-                        onClick={async () => {
-                          const npcName = npcNameInput.trim();
-                          if (!npcName) return;
-                          const npcId = `npc:${npcName.toLowerCase().replace(/\s+/g, "-")}:${Date.now()}`;
-                          if (!(await emitCombatFlow("JOIN", {
-                            userId: npcId,
-                            nome: npcName,
-                          }))) return;
-                          await appendCombatLog([
-                            {
-                              personagem: "SISTEMA A.S.A.",
-                              acao: `${npcName} entrou no combate.`,
-                              rodada: rodadaAtual,
-                            },
-                          ]);
-                          setNpcNameInput("");
-                        }}
-                        style={{ ...styles.btnStep, whiteSpace: "nowrap" }}
-                      >
-                        + NPC
-                      </button>
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-                        gap: "8px",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      <select
-                        value={selectedBestiary?.id || ""}
-                        onChange={(e) => setSelectedBestiaryId(e.target.value)}
-                        style={{ ...styles.selectField, padding: "8px" }}
-                      >
-                        {bestiaryEntries.map((monster) => (
-                          <option key={monster.id} value={monster.id}>
-                            VD {monster.vd || "?"} - {monster.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => addMonsterToCombat(selectedBestiary)}
-                        style={{
-                          ...styles.btnStep,
-                          whiteSpace: "nowrap",
-                          borderColor: colors.brand,
-                          color: colors.brand,
-                        }}
-                      >
-                        + Monstro
-                      </button>
-                    </div>
-                    <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
-                      {combatParticipants.map((p) => (
-                        <label
-                          key={p.userId}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            color: "#d1d5db",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedOrderDraft.includes(p.userId)}
-                            onChange={() =>
-                              setSelectedOrderDraft((prev) =>
-                                prev.includes(p.userId)
-                                  ? prev.filter((id) => id !== p.userId)
-                                  : [...prev, p.userId]
-                              )
-                            }
-                          />
-                          {p.nome}
-                        </label>
-                      ))}
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!selectedOrderDraft.length) {
-                          alert("Selecione ao menos 1 participante.");
-                          return;
-                        }
-                        if (!(await emitCombatFlow("SET_ORDER", {
-                          order: selectedOrderDraft,
-                        }))) return;
-                        await appendCombatLog([
-                          {
-                            personagem: "SISTEMA A.S.A.",
-                            acao: `Ordem definida pelo mestre (${selectedOrderDraft.length} participantes).`,
-                            rodada: rodadaAtual,
-                          },
-                        ]);
-                      }}
-                      style={{
-                        ...styles.btnStep,
-                        width: "100%",
-                        borderColor: colors.brand,
-                        color: colors.brand,
-                      }}
-                    >
-                      Definir ordem selecionada
-                    </button>
-                    <button
-                      onClick={resetCombatTable}
-                      style={{
-                        ...styles.btnStep,
-                        width: "100%",
-                        marginTop: "8px",
-                        borderColor: colors.pv,
-                        color: colors.pv,
-                      }}
-                    >
-                      Resetar combate
-                    </button>
-                  </div>
-                )}
-
-                {isDM && combatParticipants.some((p) => p.kind === "monster") && (
-                  <div
-                    style={{
-                      marginBottom: "20px",
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: "10px",
-                      padding: "10px",
-                      textAlign: "left",
-                    }}
-                  >
-                    <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "8px" }}>
-                      ACOES DE MONSTROS
-                    </div>
-                    <div style={{ display: "grid", gap: "10px" }}>
-                      {combatParticipants
-                        .filter((participant) => participant.kind === "monster")
-                        .map((participant) => {
-                          const monster =
-                            participant.monster ||
-                            bestiaryEntries.find(
-                              (entry) => entry.id === participant.monsterId
-                            );
-                          return (
-                            <div
-                              key={participant.userId}
-                              style={{
-                                border: `1px solid ${colors.border}`,
-                                borderRadius: "8px",
-                                padding: "10px",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  color: "#fff",
-                                  fontWeight: "bold",
-                                  fontSize: "12px",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                {participant.nome}
-                              </div>
-                              <div style={{ display: "grid", gap: "6px" }}>
-                                {(monster?.actions || []).map((action, index) => (
-                                  <button
-                                    key={`${participant.userId}-${action.name}-${index}`}
-                                    onClick={() =>
-                                      sendMonsterActionToLog(participant, action)
-                                    }
-                                    style={{
-                                      ...styles.btnStep,
-                                      textAlign: "left",
-                                      borderColor: colors.brand,
-                                      color: "#d1d5db",
-                                    }}
-                                  >
-                                    {action.type} - {action.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
+                {renderCombatDirection()}
 
                 <div
                   style={{
@@ -5700,7 +5710,7 @@ export default function AppContent() {
       >
         {syncIndicator}
         {/* ABA 1: STATUS (BIO-MONITOR) */}
-        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel}/></React.Suspense>}
+        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel} renderCombatDirection={renderCombatDirection}/></React.Suspense>}
         {activeTab === "status" && renderCharacterPanel("status")}
         {activeTab === "classe" && renderCharacterPanel("classe")}
         {/* ABA 3: PERÍCIAS */}

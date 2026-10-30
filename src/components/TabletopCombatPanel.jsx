@@ -3,11 +3,10 @@ import { participantToken, tabletopCombatView } from '../domain/tabletopCombat';
 
 export default function TabletopCombatPanel({ combat, manager, preview, userId, character,
   scene, tokens, onFocusToken, onJoinCombat, onFinishOwnTurn, onFinishCurrentTurn,
-  onAdvanceRound, renderCharacterPanel }) {
+  onAdvanceRound, renderCharacterPanel, renderCombatDirection, onExitPreview }) {
   const [actionTab, setActionTab] = useState('rituais');
   const [expanded, setExpanded] = useState(false);
   const privileged = manager && !preview;
-  const selectedActionTab = !character?.id && privileged ? "combate" : actionTab;
   const state = combat.state;
   const view = tabletopCombatView(state, combat.logs, privileged);
   const done = state?.turn_done_by || [];
@@ -17,6 +16,8 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
   const canAdvance = state?.turn_order?.length > 0 && state.turn_order.every((id) => done.includes(id));
   return <details className="vt-card vt-combat" open>
     <summary>Combate · Rodada {state?.rodada || '—'}</summary>
+    <p className="vt-combat-mode">{preview ? 'Prévia dos jogadores' : privileged ? 'Visão do mestre' : 'Visão do jogador'}</p>
+    {preview && manager && onExitPreview && <button type="button" onClick={onExitPreview}>Voltar à visão do mestre</button>}
     {combat.error && <div role="alert" className="vt-alert">{combat.error}<button type="button" onClick={() => combat.refresh()}>Reconectar combate</button></div>}
     {!state ? <p role="status">{combat.error ? 'Combate indisponível.' : 'Conectando ao combate…'}</p> : <>
       <p className="vt-combat-turn" aria-live="polite">Turno: {view.current?.nome || (state.turn_order?.length ? 'Aguardando a mesa' : 'Ordem ainda não definida')}{canAdvance ? ' · Rodada concluída' : ''}</p>
@@ -36,21 +37,27 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
         {privileged && <>
           <button type="button" disabled={locked || !view.currentId || done.includes(view.currentId)} onClick={onFinishCurrentTurn}>Encerrar turno atual (Mestre)</button>
           <button type="button" disabled={locked || !canAdvance} onClick={onAdvanceRound}>Avançar rodada</button>
+          {!state.turn_order?.length && <p className="vt-muted">Adicione participantes e defina a ordem em “Direção do combate” para começar.</p>}
         </>}
       </div>}
     </>}
     {combat.busy && <p role="status">Salvando ação…</p>}
-    {!preview && renderCharacterPanel && <details className="vt-action-drawer">
+    {privileged && renderCombatDirection && <details className="vt-combat-direction" open>
+      <summary>Direção do combate (Mestre)</summary>
+      <fieldset disabled={locked} className="vt-action-content">
+        {renderCombatDirection()}
+      </fieldset>
+    </details>}
+    {!preview && character?.id && renderCharacterPanel && <details className="vt-action-drawer">
       <summary>Ações e ficha na mesa</summary>
-      <label>Área de ação<select aria-label="Área de ação" value={selectedActionTab} onChange={(e) => setActionTab(e.target.value)}>
+      <label>Área de ação<select aria-label="Área de ação" value={actionTab} onChange={(e) => setActionTab(e.target.value)}>
         {character?.id && <>
           <option value="status">Recursos e atributos</option><option value="classe">Habilidades e poderes</option>
           <option value="pericias">Perícias</option><option value="rituais">Rituais</option><option value="inventario">Inventário e armas</option>
         </>}
-        {privileged && <option value="combate">Direção do combate e monstros</option>}
       </select></label>
       <fieldset disabled={locked || combat.logBusy} className="vt-action-content">
-        {renderCharacterPanel(selectedActionTab)}
+        {renderCharacterPanel(actionTab)}
       </fieldset>
     </details>}
     <details className="vt-combat-history" open>

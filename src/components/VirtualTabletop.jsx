@@ -1073,7 +1073,7 @@ export function TabletopView({
         </div>
         {combat && (
           <aside className="vt-sidebar" aria-label="Combate da mesa">
-            <TabletopCombatPanel key={missionId} combat={combat} manager={manager} preview={preview} userId={userId} character={character} scene={scene} tokens={tokens} onFocusToken={focusToken} {...combatControls} />
+            <TabletopCombatPanel key={missionId} combat={combat} manager={manager} preview={preview} userId={userId} character={character} scene={scene} tokens={tokens} onFocusToken={focusToken} onExitPreview={() => togglePreview(false)} {...combatControls} />
           </aside>
         )}
       </div>
