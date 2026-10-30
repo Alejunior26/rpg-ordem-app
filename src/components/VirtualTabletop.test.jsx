@@ -75,6 +75,17 @@ describe("player preview round trip", () => {
     const stage = container.querySelector(".vt-stage");
     stage.scrollLeft = 190;
     stage.scrollTop = 260;
+    stage.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 600,
+    });
+    fireEvent.wheel(stage, { deltaY: -100, clientX: 100, clientY: 100 });
+    fireEvent.change(screen.getByLabelText("Zoom do mapa"), {
+      target: { value: "200" },
+    });
+    const camera = container.querySelector(".vt-map-size").style.transform;
 
     fireEvent.click(screen.getByLabelText("Prévia dos jogadores"));
     expect(
@@ -109,6 +120,9 @@ describe("player preview round trip", () => {
     expect(screen.getByLabelText("Arte do token selecionado")).toBeTruthy();
     expect(stage.scrollLeft).toBe(190);
     expect(stage.scrollTop).toBe(260);
+    expect(container.querySelector(".vt-map-size").style.transform).toBe(
+      camera,
+    );
     expect(screen.getByText("+ Novo cenário").closest("details")).toBe(details);
     expect(details.open).toBe(true);
     expect(screen.getByLabelText("Nome da cena").value).toBe("Próximo andar");

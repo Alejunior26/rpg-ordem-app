@@ -3,6 +3,8 @@ import { supabase } from "../lib/supabase";
 import {
   resolveTabletopImages,
   uploadTabletopImage,
+  catalogImage,
+  getCampaignCatalog,
 } from "../services/tabletopAssets";
 const empty = {
   scenes: [],
@@ -56,23 +58,42 @@ export function useTabletop(missionId, userId, manager) {
       const error = results.find((r) => r.error)?.error;
       if (error) throw error;
       const [room, scenes, tokens, assets] = results.map((r) => r.data);
-      const paths = [
+      const allPaths = [
         ...(scenes || []).map((s) => s.map_path),
         ...(tokens || []).map((t) => t.image_path),
         ...(assets || []).map((a) => a.path),
       ];
+      const currentScene =
+        (scenes || []).find((s) => s.id === room?.active_scene_id) ||
+        (manager ? scenes?.[0] : null);
+      const urgent = new Set([
+        currentScene?.map_path,
+        ...(tokens || [])
+          .filter((t) => t.scene_id === currentScene?.id)
+          .map((t) => t.image_path),
+      ]);
+      const paths = allPaths.filter(
+        (path) => !catalogImage(path) || urgent.has(path),
+      );
       const images = await resolveTabletopImages(paths, key);
       if (scope.current === key && ticket === request.current)
-        setData({
+        setData((previous) => ({
           missionId,
           room,
           scenes: scenes || [],
           tokens: tokens || [],
           assets: assets || [],
-          images,
+          images: {
+            ...Object.fromEntries(
+              Object.entries(
+                previous.missionId === missionId ? previous.images : {},
+              ).filter(([path]) => allPaths.includes(path)),
+            ),
+            ...images,
+          },
           loading: false,
           error: "",
-        });
+        }));
     } catch {
       if (scope.current === key && ticket === request.current)
         setData((prev) => ({
@@ -83,6 +104,28 @@ export function useTabletop(missionId, userId, manager) {
         }));
     }
   }, [missionId, manager, key]);
+  const ensureImages = useCallback(
+    async (paths) => {
+      const unique = [...new Set(paths.filter(Boolean))];
+      if (!unique.length) return;
+      try {
+        const images = await resolveTabletopImages(unique, key);
+        if (scope.current === key)
+          setData((previous) => ({
+            ...previous,
+            images: { ...previous.images, ...images },
+          }));
+      } catch {
+        if (scope.current === key)
+          setData((previous) => ({
+            ...previous,
+            error:
+              "Não foi possível carregar uma arte. Confira a conexão e tente novamente.",
+          }));
+      }
+    },
+    [key],
+  );
   useEffect(() => {
     setData({ ...empty, missionId });
     setBusy(false);
@@ -155,9 +198,11 @@ export function useTabletop(missionId, userId, manager) {
           error:
             error.code === "40001" || error.message === "conflict"
               ? "A mesa mudou enquanto você agia. Confira a posição atual e tente novamente."
-              : error.message?.startsWith("Escolha uma imagem")
-                ? error.message
-                : "A ação não foi salva. Confira suas permissões, os limites do mapa e a conexão.",
+              : error.message === "room areas overlap"
+                ? "As marcações das salas se cruzaram. Marque cada sala sem sobrepor as áreas."
+                : error.message?.startsWith("Escolha uma imagem")
+                  ? error.message
+                  : "A ação não foi salva. Confira suas permissões, os limites do mapa e a conexão.",
         }));
       }
       return false;
@@ -184,6 +229,41 @@ export function useTabletop(missionId, userId, manager) {
     ...(data.missionId === missionId ? data : { ...empty, missionId }),
     busy,
     refresh,
+    ensureImages,
+    installCampaignPack: () =>
+      run(async () => {
+        const catalog = await getCampaignCatalog(missionId);
+        const normalize = (value) =>
+          value
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
+        const replacements = data.assets
+          .filter((a) => a.kind === "token" && !catalogImage(a.path))
+          .flatMap((old) => {
+            const next = catalog.find(
+              (item) =>
+                item.kind === "token" &&
+                [item.name, ...(item.aliases || [])].some(
+                  (name) => normalize(name) === normalize(old.name),
+                ),
+            );
+            return next
+              ? [
+                  {
+                    old: old.path,
+                    new: `${missionId}/catalog/v6/${next.id}.png`,
+                  },
+                ]
+              : [];
+          });
+        return supabase.rpc("asa_tabletop_install_catalog", {
+          p_mission_id: missionId,
+          p_catalog: catalog,
+          p_replacements: replacements,
+        });
+      }),
     updateScene: (row, patch) => update("asa_tabletop_scenes", row, patch),
     updateToken: (row, patch) => update("asa_tabletop_tokens", row, patch),
     hideScene: () =>

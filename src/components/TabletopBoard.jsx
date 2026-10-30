@@ -1,9 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import {
   canMoveToken,
+  darkRooms,
   fogRectangle,
   snapPosition,
-  tokenInFog,
+  tokenIsVisible,
 } from "../domain/tabletop";
 
 // Keep SVG text in normal pixel-sized units. Fractional font sizes in a
@@ -23,6 +24,8 @@ export default function TabletopBoard({
   onSelect = () => {},
   onMove,
   onFog,
+  onRoom,
+  onSpawn,
 }) {
   const svg = useRef(null),
     gesture = useRef(null);
@@ -52,8 +55,7 @@ export default function TabletopBoard({
     );
   const shown = tokens.filter(
     (t) =>
-      !t.deleted &&
-      ((manager && !preview) || (t.visible && !tokenInFog(t, scene.fog))),
+      !t.deleted && ((manager && !preview) || tokenIsVisible(t, scene, tokens)),
   );
   function point(event) {
     const rect = svg.current.getBoundingClientRect();
@@ -90,7 +92,8 @@ export default function TabletopBoard({
       offset: token ? { x: start.x - token.x, y: start.y - token.y } : null,
     };
     svg.current.setPointerCapture?.(event.pointerId);
-    if (type === "fog") setDraft({ fog: fogRectangle(start, start, scene) });
+    if (type === "fog" || type === "room")
+      setDraft({ fog: fogRectangle(start, start, scene) });
     if (type === "ruler") setRuler({ start, end: start });
   }
   function motion(event) {
@@ -108,7 +111,8 @@ export default function TabletopBoard({
           g.token.size,
         ),
       });
-    if (g.type === "fog") setDraft({ fog: fogRectangle(g.start, end, scene) });
+    if (g.type === "fog" || g.type === "room")
+      setDraft({ fog: fogRectangle(g.start, end, scene) });
     if (g.type === "ruler") setRuler({ start: g.start, end });
   }
   async function finish(event) {
@@ -130,6 +134,7 @@ export default function TabletopBoard({
           await onMove?.(g.token, next);
       }
       if (g.type === "fog") await onFog?.(fogRectangle(g.start, end, scene));
+      if (g.type === "room") await onRoom?.(fogRectangle(g.start, end, scene));
     } finally {
       setDraft(null);
     }
@@ -179,7 +184,20 @@ export default function TabletopBoard({
       aria-label={`Mapa: ${scene.name}. Selecione um token e use as setas para movê-lo.`}
       style={{ aspectRatio: `${scene.columns}/${scene.rows}` }}
       onPointerDown={(e) => {
-        if (tool === "fog" && manager && !preview) capture(e, "fog");
+        if (
+          tool === "spawn" &&
+          manager &&
+          !preview &&
+          !busy &&
+          e.button === 0
+        ) {
+          const pos = point(e);
+          if (pos) {
+            e.preventDefault();
+            void onSpawn?.(snapPosition(pos.x, pos.y, scene));
+          }
+        } else if (tool === "fog" && manager && !preview) capture(e, "fog");
+        else if (tool === "room" && manager && !preview) capture(e, "room");
         else if (tool === "ruler") capture(e, "ruler");
         else onSelect(null);
       }}
@@ -226,6 +244,61 @@ export default function TabletopBoard({
           pointerEvents="none"
         />
       )}
+      {darkRooms(scene, tokens).map((area, index) => (
+        <rect
+          key={`dark-${index}`}
+          className="vt-room-cover"
+          x={area.x * CELL}
+          y={area.y * CELL}
+          width={area.w * CELL}
+          height={area.h * CELL}
+          fill="#070914"
+          opacity={manager && !preview ? 0.65 : 1}
+          pointerEvents="none"
+        />
+      ))}
+      {manager &&
+        !preview &&
+        (scene.vision_areas || []).map((area, index) => (
+          <g key={`room-${index}`} pointerEvents="none">
+            <rect
+              x={area.x * CELL}
+              y={area.y * CELL}
+              width={area.w * CELL}
+              height={area.h * CELL}
+              fill="none"
+              stroke="#8fe4dc"
+              strokeWidth={2}
+              strokeDasharray="8 6"
+            />
+            <text
+              x={area.x * CELL + 8}
+              y={area.y * CELL + 23}
+              fontSize={16}
+              fill="#c9fff7"
+              stroke="#080a14"
+              strokeWidth={3}
+              paintOrder="stroke"
+            >
+              Sala {index + 1}
+            </text>
+          </g>
+        ))}
+      {manager && !preview && (
+        <g
+          pointerEvents="none"
+          className="vt-entry"
+          transform={`translate(${((scene.spawn_x || 0) + 0.5) * CELL} ${((scene.spawn_y || 0) + 0.5) * CELL})`}
+        >
+          <circle r="17" fill="#0c2929" stroke="#8fe4dc" strokeWidth="2" />
+          <path
+            d="M-8 0H8M2-6L8 0 2 6"
+            fill="none"
+            stroke="#baffef"
+            strokeWidth="3"
+          />
+        </g>
+      )}
       {shown.map((token) => {
         const p = draft?.id === token.id ? draft : token,
           movable = canMoveToken(token, scene, userId, manager, preview),
@@ -237,7 +310,7 @@ export default function TabletopBoard({
             tabIndex={0}
             role="button"
             aria-label={`${token.name}${token.visible ? "" : " (oculto)"}${movable ? ", movível" : ""}`}
-            className={`vt-token ${selectedId === token.id ? "selected" : ""}`}
+            className={`vt-token ${image ? "vt-token-art" : ""} ${selectedId === token.id ? "selected" : ""}`}
             style={{
               cursor: movable ? "grab" : "pointer",
               opacity: token.visible ? 1 : 0.5,
@@ -254,11 +327,13 @@ export default function TabletopBoard({
             }}
             onKeyDown={(e) => keyMove(e, token)}
           >
+            <title>{token.name}</title>
             <circle
               cx={(token.size * CELL) / 2}
               cy={(token.size * CELL) / 2}
               r={token.size * CELL * 0.47}
               fill="#111520"
+              fillOpacity={image ? 0.25 : 1}
               stroke={selectedId === token.id ? "#ffffff" : token.color}
               strokeWidth={CELL * (selectedId === token.id ? 0.07 : 0.045)}
               strokeDasharray={
@@ -289,6 +364,7 @@ export default function TabletopBoard({
               </text>
             )}
             <text
+              className="vt-token-label"
               x={(token.size * CELL) / 2}
               y={CELL * (token.size + 0.25)}
               textAnchor="middle"

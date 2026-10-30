@@ -3,11 +3,14 @@ import { supabase } from "../lib/supabase";
 import { useTabletop } from "../hooks/useTabletop";
 import {
   campaignFolderImages,
+  characterSpawn,
   safeImageUrl,
   snapPosition,
-  tokenInFog,
+  tokenIsVisible,
 } from "../domain/tabletop";
 import TabletopBoard from "./TabletopBoard";
+import TabletopViewport from "./TabletopViewport";
+import TabletopAssetThumbnail from "./TabletopAssetThumbnail";
 import "./tabletop.css";
 
 const initialScene = {
@@ -58,11 +61,13 @@ export function TabletopView({
     [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(false),
     [zoom, setZoom] = useState(100),
+    [pan, setPan] = useState({ x: 0, y: 0 }),
     [tool, setTool] = useState("move");
   const [sceneDraft, setSceneDraft] = useState(initialScene),
     [tokenDraft, setTokenDraft] = useState(initialToken);
   const [importProgress, setImportProgress] = useState(null),
     [localError, setLocalError] = useState("");
+  const [notice, setNotice] = useState("");
   const importCancel = useRef(false);
   const stage = useRef(null),
     masterView = useRef(null),
@@ -99,17 +104,25 @@ export function TabletopView({
   const selected = tokens.find(
     (t) =>
       t.id === selectedId &&
-      ((manager && !preview) || (t.visible && !tokenInFog(t, scene?.fog))),
+      ((manager && !preview) || tokenIsVisible(t, scene, tokens)),
   );
   const maps = table.assets.filter((a) => a.kind === "map"),
     art = table.assets.filter((a) => a.kind === "token");
   const disabled = table.busy || Boolean(importProgress);
+  const imageKey = [scene?.map_path, ...tokens.map((t) => t.image_path)]
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  useEffect(() => {
+    void table.ensureImages?.(imageKey.split("|"));
+  }, [imageKey, table.ensureImages]);
   function togglePreview(checked) {
     if (checked) {
       masterView.current = {
         sceneId: scene?.id || "",
         selectedId,
         zoom,
+        pan,
         tool,
         left: stage.current?.scrollLeft || 0,
         top: stage.current?.scrollTop || 0,
@@ -120,11 +133,13 @@ export function TabletopView({
       setSelectedScene(scene?.id || "");
       setTool("move");
       setSelectedId(null);
+      setPan({ x: 0, y: 0 });
     } else if (masterView.current) {
       const saved = masterView.current;
       setSelectedScene(saved.sceneId);
       setSelectedId(saved.selectedId);
       setZoom(saved.zoom);
+      setPan(saved.pan);
       setTool(saved.tool);
       restoreView.current = true;
     }
@@ -212,8 +227,12 @@ export function TabletopView({
       owner_id: tokenDraft.owner_id || null,
       size: Number(tokenDraft.size),
       image_path: tokenDraft.image_path || null,
-      x: 0,
-      y: 0,
+      ...snapPosition(
+        scene.spawn_x || 0,
+        scene.spawn_y || 0,
+        scene,
+        Number(tokenDraft.size),
+      ),
     });
     if (result?.id) {
       setSelectedId(result.id);
@@ -222,14 +241,7 @@ export function TabletopView({
   }
   async function addMyCharacter() {
     if (!scene || !character?.id) return;
-    let spawn;
-    for (let y = 0; y < scene.rows && !spawn; y++)
-      for (let x = 0; x < scene.columns && !spawn; x++)
-        if (
-          !tokenInFog({ x, y, size: 1 }, scene.fog) &&
-          !tokens.some((t) => t.x === x && t.y === y)
-        )
-          spawn = { x, y };
+    const spawn = characterSpawn(scene, tokens);
     if (!spawn) {
       setLocalError("Aguarde o mestre liberar uma área para seu personagem.");
       return;
@@ -317,6 +329,24 @@ export function TabletopView({
               {manager && !preview && (
                 <button
                   type="button"
+                  aria-pressed={tool === "spawn"}
+                  onClick={() => setTool("spawn")}
+                >
+                  Marcar entrada
+                </button>
+              )}
+              {manager && !preview && (
+                <button
+                  type="button"
+                  aria-pressed={tool === "room"}
+                  onClick={() => setTool("room")}
+                >
+                  Marcar sala
+                </button>
+              )}
+              {manager && !preview && (
+                <button
+                  type="button"
                   aria-pressed={tool === "fog"}
                   onClick={() => setTool("fog")}
                 >
@@ -330,51 +360,84 @@ export function TabletopView({
                   value={zoom}
                   onChange={(e) => setZoom(Number(e.target.value))}
                 >
-                  {[75, 100, 125, 150, 200].map((n) => (
-                    <option key={n} value={n}>
-                      {n}%
-                    </option>
-                  ))}
+                  {[50, 75, 100, 125, 150, 200, 300, 400, zoom]
+                    .filter((n, i, all) => all.indexOf(n) === i)
+                    .sort((a, b) => a - b)
+                    .map((n) => (
+                      <option key={n} value={n}>
+                        {n}%
+                      </option>
+                    ))}
                 </select>
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(100);
+                  setPan({ x: 0, y: 0 });
+                }}
+              >
+                Centralizar
+              </button>
             </div>
           </div>
-          <div className="vt-stage" ref={stage}>
-            <div className="vt-map-size" style={{ width: `${zoom}%` }}>
-              <TabletopBoard
-                key={scene?.id || "empty"}
-                scene={scene}
-                tokens={tokens}
-                images={table.images}
-                userId={userId}
-                manager={manager}
-                preview={preview}
-                busy={disabled}
-                selectedId={selectedId}
-                tool={tool}
-                onSelect={setSelectedId}
-                onMove={(token, pos) => table.updateToken(token, pos)}
-                onFog={(rect) =>
-                  table.updateScene(scene, {
-                    fog: [...(scene.fog || []), rect],
-                  })
-                }
-              />
-            </div>
+          <TabletopViewport
+            stageRef={stage}
+            scene={scene}
+            zoom={zoom}
+            onZoom={setZoom}
+            pan={pan}
+            onPan={setPan}
+            tool={tool}
+            preview={preview}
+            onBackgroundClick={() => setSelectedId(null)}
+          >
+            <TabletopBoard
+              key={scene?.id || "empty"}
+              scene={scene}
+              tokens={tokens}
+              images={table.images}
+              userId={userId}
+              manager={manager}
+              preview={preview}
+              busy={disabled}
+              selectedId={selectedId}
+              tool={tool}
+              onSelect={setSelectedId}
+              onMove={(token, pos) => table.updateToken(token, pos)}
+              onFog={(rect) =>
+                table.updateScene(scene, {
+                  fog: [...(scene.fog || []), rect],
+                })
+              }
+              onRoom={(rect) =>
+                table.updateScene(scene, {
+                  vision_mode: "rooms",
+                  vision_areas: [...(scene.vision_areas || []), rect],
+                })
+              }
+              onSpawn={(pos) =>
+                table.updateScene(scene, { spawn_x: pos.x, spawn_y: pos.y })
+              }
+            />
             {table.loading && (
               <div className="vt-loading" role="status">
                 Sincronizando a mesa…
               </div>
             )}
-          </div>
+          </TabletopViewport>
           <div className="vt-map-footer">
             <span>▦ 1 quadrado = 1,5 m</span>
             <span>
-              {tool === "fog"
-                ? "Arraste para cobrir uma área."
-                : tool === "ruler"
-                  ? "Arraste entre dois pontos para medir."
-                  : "Arraste seu token ou selecione e use as setas."}
+              {tool === "spawn"
+                ? "Clique no ponto por onde os personagens entram na cena."
+                : tool === "room"
+                  ? "Arraste sobre uma sala. Ela só aparece ao grupo enquanto houver um personagem dentro."
+                  : tool === "fog"
+                    ? "Arraste para cobrir uma área."
+                    : tool === "ruler"
+                      ? "Arraste entre dois pontos para medir."
+                      : "Roda: zoom · Arraste o fundo: mover mapa · Arraste seu token: mover personagem."}
             </span>
             <span>
               {table.busy
@@ -396,6 +459,8 @@ export function TabletopView({
                   onChange={(e) => {
                     setSelectedScene(e.target.value);
                     setSelectedId(null);
+                    setPan({ x: 0, y: 0 });
+                    setZoom(100);
                   }}
                 >
                   <option value="" disabled>
@@ -427,6 +492,50 @@ export function TabletopView({
               </label>
               {scene && !preview && (
                 <>
+                  <label className="vt-check">
+                    <input
+                      type="checkbox"
+                      checked={scene.vision_mode === "rooms"}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        table.updateScene(scene, {
+                          vision_mode: e.target.checked ? "rooms" : "manual",
+                        })
+                      }
+                    />
+                    Visão automática por salas
+                  </label>
+                  {scene.vision_mode === "rooms" && (
+                    <div className="vt-room-list">
+                      <p className="vt-muted">
+                        Marque os limites de cada sala com “Marcar sala”.
+                        Corredores sem marcação permanecem visíveis. Um token de
+                        Personagem, inclusive controlado pelo mestre, abre a
+                        sala; o último a sair a cobre novamente.
+                      </p>
+                      {(scene.vision_areas || []).map((area, index) => (
+                        <div className="vt-room-row" key={index}>
+                          <span>
+                            Sala {index + 1} · {area.w} × {area.h}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            aria-label={`Remover sala ${index + 1}`}
+                            onClick={() =>
+                              table.updateScene(scene, {
+                                vision_areas: scene.vision_areas.filter(
+                                  (_, i) => i !== index,
+                                ),
+                              })
+                            }
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <label className="vt-check">
                     <input
                       type="checkbox"
@@ -516,8 +625,7 @@ export function TabletopView({
                 {
                   tokens.filter(
                     (t) =>
-                      (manager && !preview) ||
-                      (t.visible && !tokenInFog(t, scene?.fog)),
+                      (manager && !preview) || tokenIsVisible(t, scene, tokens),
                   ).length
                 }
               </span>
@@ -526,8 +634,7 @@ export function TabletopView({
               {tokens
                 .filter(
                   (t) =>
-                    (manager && !preview) ||
-                    (t.visible && !tokenInFog(t, scene?.fog)),
+                    (manager && !preview) || tokenIsVisible(t, scene, tokens),
                 )
                 .map((t) => (
                   <button
@@ -570,6 +677,20 @@ export function TabletopView({
           {selected && manager && !preview && (
             <div className="vt-card">
               <h3>{selected.name}</h3>
+              <label>
+                Tipo do token
+                <select
+                  value={selected.kind}
+                  disabled={disabled}
+                  onChange={(e) =>
+                    table.updateToken(selected, { kind: e.target.value })
+                  }
+                >
+                  <option value="player">Personagem</option>
+                  <option value="npc">NPC</option>
+                  <option value="enemy">Ameaça</option>
+                </select>
+              </label>
               <label className="vt-check">
                 <input
                   type="checkbox"
@@ -845,6 +966,30 @@ export function TabletopView({
               <span className="vt-count">{table.assets.length}</span>
             </summary>
             <p className="vt-muted">
+              A.S.A. Tower 2077: artes revisadas e cenários preparados para
+              explorar.
+            </p>
+            <button
+              type="button"
+              className="vt-primary"
+              disabled={disabled}
+              onClick={async () => {
+                setNotice("");
+                const result = await table.installCampaignPack?.();
+                if (result)
+                  setNotice(
+                    `${result.scenes} cenário(s) e ${result.assets} arte(s) adicionados; ${result.tokens} token(s) atualizado(s). Escolha uma cena em Direção da cena.`,
+                  );
+              }}
+            >
+              Adicionar mapas e tokens v6
+            </button>
+            {notice && (
+              <p className="vt-muted" role="status">
+                {notice}
+              </p>
+            )}
+            <p className="vt-muted">
               Importe a pasta ASA_Tower_2077 descompactada para trazer os mapas
               e as artes, incluindo os novos Portadores.
             </p>
@@ -881,12 +1026,12 @@ export function TabletopView({
             )}
             <div className="vt-library">
               {table.assets.map((a) => (
-                <figure key={a.id}>
-                  {table.images[a.path] && (
-                    <img loading="lazy" alt="" src={table.images[a.path]} />
-                  )}
-                  <figcaption>{a.name}</figcaption>
-                </figure>
+                <TabletopAssetThumbnail
+                  key={a.id}
+                  asset={a}
+                  url={table.images[a.path]}
+                  ensureImages={table.ensureImages}
+                />
               ))}
             </div>
           </details>

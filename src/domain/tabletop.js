@@ -14,6 +14,61 @@ export function tokenInFog(token, fog = []) {
       token.y + token.size > f.y,
   );
 }
+export function occupiedRooms(scene, tokens = []) {
+  if (scene?.vision_mode !== "rooms") return [];
+  return (scene.vision_areas || []).filter((area) =>
+    tokens.some(
+      (pc) =>
+        pc.scene_id === scene.id &&
+        pc.kind === "player" &&
+        pc.visible &&
+        !pc.deleted &&
+        !tokenInFog(pc, scene.fog) &&
+        pc.x + pc.size / 2 >= area.x &&
+        pc.x + pc.size / 2 < area.x + area.w &&
+        pc.y + pc.size / 2 >= area.y &&
+        pc.y + pc.size / 2 < area.y + area.h,
+    ),
+  );
+}
+export function darkRooms(scene, tokens = []) {
+  const open = occupiedRooms(scene, tokens);
+  return scene?.vision_mode === "rooms"
+    ? (scene.vision_areas || []).filter((area) => !open.includes(area))
+    : [];
+}
+export function tokenIsVisible(token, scene, tokens = []) {
+  return (
+    !token.deleted &&
+    token.visible &&
+    !tokenInFog(token, scene?.fog) &&
+    !tokenInFog(token, darkRooms(scene, tokens))
+  );
+}
+export function characterSpawn(scene, tokens = []) {
+  const cells = [];
+  for (let y = 0; y < scene.rows; y++)
+    for (let x = 0; x < scene.columns; x++) cells.push({ x, y });
+  cells.sort(
+    (a, b) =>
+      Math.abs(a.x - (scene.spawn_x || 0)) +
+      Math.abs(a.y - (scene.spawn_y || 0)) -
+      (Math.abs(b.x - (scene.spawn_x || 0)) +
+        Math.abs(b.y - (scene.spawn_y || 0))),
+  );
+  return cells.find(
+    (cell) =>
+      !tokenInFog({ ...cell, size: 1 }, scene.fog) &&
+      !tokens.some(
+        (t) =>
+          !t.deleted &&
+          cell.x < t.x + t.size &&
+          cell.x + 1 > t.x &&
+          cell.y < t.y + t.size &&
+          cell.y + 1 > t.y,
+      ),
+  );
+}
 export function canMoveToken(token, scene, userId, manager, preview = false) {
   return (
     !preview &&

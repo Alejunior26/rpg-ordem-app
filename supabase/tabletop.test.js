@@ -58,6 +58,24 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      new URL(
+        "./migrations/20261030031756_tabletop_room_vision.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(
+    readFileSync(
+      new URL(
+        "./migrations/20261030033437_tabletop_party_observers.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await as(
     admin,
     `insert into asa_tabletop_scenes(id,mission_id,name,map_path) values($1,$2,'Cozinha',$3),($4,$2,'Laboratório',$5),($6,$7,'Outra campanha',null)`,
@@ -273,5 +291,180 @@ describe("private tabletop and movement authorization", () => {
         "invalid/path",
       ]),
     ).toEqual([{ allowed: false }]);
+  });
+  it("installs the campaign pack once, preserves the active scene and rejects player imports or cross-mission replacements", async () => {
+    const catalog = [
+      { id: "A01", name: "Drone v6", kind: "token" },
+      {
+        id: "SI01",
+        name: "Cozinha v6",
+        kind: "map",
+        columns: 24,
+        rows: 18,
+        areas: [{ x: 0, y: 0, w: 24, h: 18 }],
+      },
+    ];
+    const before = (
+      await as(
+        admin,
+        "select active_scene_id from asa_tabletop_rooms where mission_id=$1",
+        [m1],
+      )
+    )[0].active_scene_id;
+    const install = (uid, items = catalog, replacements = []) =>
+      as(uid, "select asa_tabletop_install_catalog($1,$2,$3) as result", [
+        m1,
+        JSON.stringify(items),
+        JSON.stringify(replacements),
+      ]);
+    await expect(install(a)).rejects.toThrow(/manager/);
+    expect((await install(admin))[0].result).toEqual({
+      assets: 2,
+      scenes: 1,
+      tokens: 0,
+    });
+    expect((await install(admin))[0].result).toEqual({
+      assets: 0,
+      scenes: 0,
+      tokens: 0,
+    });
+    expect(
+      (
+        await as(
+          admin,
+          "select active_scene_id from asa_tabletop_rooms where mission_id=$1",
+          [m1],
+        )
+      )[0].active_scene_id,
+    ).toBe(before);
+    expect(
+      await as(
+        a,
+        "select id from asa_tabletop_scenes where catalog_key='v6/SI01'",
+      ),
+    ).toEqual([]);
+    await expect(
+      install(
+        admin,
+        [{ id: "A02", name: "Other", kind: "token" }],
+        [{ old: `${m2}/private.png`, new: `${m1}/catalog/v6/A01.png` }],
+      ),
+    ).rejects.toThrow(/outside mission/);
+    expect(
+      await as(admin, "select id from asa_tabletop_assets where path=$1", [
+        `${m1}/catalog/v6/A02.png`,
+      ]),
+    ).toEqual([]);
+  });
+  it("reveals occupied rooms, covers them again after the last observer leaves, and filters enemy assets under RLS", async () => {
+    const sid = id(70),
+      one = id(71),
+      two = id(72),
+      e1 = id(73),
+      e2 = id(74);
+    await as(
+      admin,
+      `insert into asa_tabletop_scenes(id,mission_id,name,vision_mode,vision_areas)
+      values($1,$2,'Exploração','rooms',$3)`,
+      [
+        sid,
+        m1,
+        JSON.stringify([
+          { x: 1, y: 1, w: 8, h: 8 },
+          { x: 12, y: 1, w: 8, h: 8 },
+        ]),
+      ],
+    );
+    await as(admin, "select asa_tabletop_activate($1,null)", [sid]);
+    for (const [tid, uid, cid, x] of [
+      [one, a, id(20), 2],
+      [two, b, id(21), 3],
+    ])
+      await as(
+        uid,
+        `insert into asa_tabletop_tokens(id,scene_id,mission_id,owner_id,character_id,kind,name,visible,x,y)
+        values($1,$2,$3,$4,$5,'player','Agente',true,$6,2)`,
+        [tid, sid, m1, uid, cid, x],
+      );
+    for (const [tid, x] of [
+      [e1, 4],
+      [e2, 15],
+    ]) {
+      await as(
+        admin,
+        `insert into asa_tabletop_tokens(id,scene_id,mission_id,kind,name,visible,x,y,image_path)
+        values($1,$2,$3,'enemy','Ameaça',true,$4,4,$5)`,
+        [tid, sid, m1, x, `${m1}/${tid}.png`],
+      );
+      await db.query(
+        `insert into storage.objects(bucket_id,name) values('asa-tabletop',$1)`,
+        [`${m1}/${tid}.png`],
+      );
+    }
+    const visible = async () =>
+      (
+        await as(
+          a,
+          "select id from asa_tabletop_tokens where scene_id=$1 and kind='enemy' order by id",
+          [sid],
+        )
+      ).map((r) => r.id);
+    expect(await visible()).toEqual([e1]);
+    expect(
+      await as(a, "select name from storage.objects where name=$1", [
+        `${m1}/${e2}.png`,
+      ]),
+    ).toEqual([]);
+    // Entering a room must be possible even before its contents are revealed.
+    await as(a, "update asa_tabletop_tokens set x=14,y=3 where id=$1", [one]);
+    expect(await visible()).toEqual([e1, e2]);
+    await as(b, "update asa_tabletop_tokens set x=0,y=0 where id=$1", [two]);
+    expect(await visible()).toEqual([e2]);
+    expect(
+      await as(a, "select name from storage.objects where name=$1", [
+        `${m1}/${e1}.png`,
+      ]),
+    ).toEqual([]);
+    await as(a, "update asa_tabletop_tokens set x=0,y=1 where id=$1", [one]);
+    expect(await visible()).toEqual([]);
+    await as(
+      admin,
+      `insert into asa_tabletop_tokens(id,scene_id,mission_id,kind,name,visible,x,y)
+      values($1,$2,$3,'player','Grupo controlado pelo mestre',true,2,2)`,
+      [id(75), sid, m1],
+    );
+    expect(await visible()).toEqual([e1]);
+    await as(
+      admin,
+      "update asa_tabletop_tokens set visible=false where id=$1",
+      [id(75)],
+    );
+    expect(await visible()).toEqual([]);
+    expect(
+      (
+        await as(
+          outsider,
+          "select asa_private.tabletop_visible_rooms($1) as rooms",
+          [sid],
+        )
+      )[0].rooms,
+    ).toEqual([]);
+    await expect(
+      as(null, "select asa_private.tabletop_visible_rooms($1)", [sid]),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      as(
+        a,
+        "update asa_tabletop_scenes set vision_mode='manual' where id=$1 returning id",
+        [sid],
+      ),
+    ).resolves.toEqual([]);
+    await expect(
+      as(
+        admin,
+        `update asa_tabletop_scenes set vision_areas='[{"x":0,"y":0,"w":4,"h":4},{"x":2,"y":2,"w":4,"h":4}]' where id=$1`,
+        [sid],
+      ),
+    ).rejects.toThrow(/overlap/);
   });
 });
