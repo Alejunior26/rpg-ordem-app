@@ -55,7 +55,8 @@ it('gives the master commands but removes them and all hidden content in preview
   expect(screen.queryByRole('button',{name:'Adicionar ameaça de teste'})).toBeNull();
   expect(screen.queryByText('Ataque secreto')).toBeNull();expect(screen.queryByText(enemy.nome)).toBeNull();
   expect(screen.queryByRole('button',{name:'Finalizar meu turno'})).toBeNull();
-  fireEvent.click(screen.getByLabelText('Prévia dos jogadores'));
+  fireEvent.click(screen.getByRole('button',{name:'Voltar à visão do mestre'}));
+  expect(screen.getByLabelText('Prévia dos jogadores').checked).toBe(false);
   expect(screen.getByLabelText('Zoom do mapa').value).toBe('200');expect(screen.getByRole('button',{name:'Encerrar turno atual (Mestre)'})).toBeTruthy();
 });
 it('advances only a finished round; opens shared actions in the table',()=>{
@@ -64,6 +65,15 @@ it('advances only a finished round; opens shared actions in the table',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Avançar rodada'}));expect(props.onAdvanceRound).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByText('Ações e ficha na mesa'));fireEvent.change(screen.getByLabelText('Área de ação'),{target:{value:'inventario'}});
   expect(props.renderCharacterPanel).toHaveBeenLastCalledWith('inventario');expect(screen.getByLabelText('Ficha compartilhada')).toBeTruthy();
+});
+it('lets the master leave preview even while combat is unavailable',()=>{
+  const props=fixture({manager:true,combat:{state:null,error:'Sem conexão com o combate'}});
+  render(<TabletopView {...props}/>);
+  fireEvent.click(screen.getByLabelText('Prévia dos jogadores'));
+  expect(screen.queryByRole('button',{name:'Adicionar ameaça de teste'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Voltar à visão do mestre'}));
+  expect(screen.getByLabelText('Prévia dos jogadores').checked).toBe(false);
+  expect(screen.getByText('Visão do mestre')).toBeTruthy();
 });
 it('does not guess by name or choose among multiple owned tokens; hidden token cannot be focused or highlighted for players',()=>{
   expect(participantToken(player,scene,[token,{...token,id:'second',visible:false}],false)).toBeNull();

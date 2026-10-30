@@ -3,7 +3,7 @@ import { participantToken, tabletopCombatView } from '../domain/tabletopCombat';
 
 export default function TabletopCombatPanel({ combat, manager, preview, userId, character,
   scene, tokens, onFocusToken, onJoinCombat, onFinishOwnTurn, onFinishCurrentTurn,
-  onAdvanceRound, renderCharacterPanel, renderCombatDirection }) {
+  onAdvanceRound, renderCharacterPanel, renderCombatDirection, onExitPreview }) {
   const [actionTab, setActionTab] = useState('rituais');
   const [expanded, setExpanded] = useState(false);
   const privileged = manager && !preview;
@@ -17,6 +17,7 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
   return <details className="vt-card vt-combat" open>
     <summary>Combate · Rodada {state?.rodada || '—'}</summary>
     <p className="vt-combat-mode">{preview ? 'Prévia dos jogadores' : privileged ? 'Visão do mestre' : 'Visão do jogador'}</p>
+    {preview && manager && onExitPreview && <button type="button" onClick={onExitPreview}>Voltar à visão do mestre</button>}
     {combat.error && <div role="alert" className="vt-alert">{combat.error}<button type="button" onClick={() => combat.refresh()}>Reconectar combate</button></div>}
     {!state ? <p role="status">{combat.error ? 'Combate indisponível.' : 'Conectando ao combate…'}</p> : <>
       <p className="vt-combat-turn" aria-live="polite">Turno: {view.current?.nome || (state.turn_order?.length ? 'Aguardando a mesa' : 'Ordem ainda não definida')}{canAdvance ? ' · Rodada concluída' : ''}</p>

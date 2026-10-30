@@ -20,6 +20,8 @@ turno corrente e avançar após todos agirem. A seção “Direção do combate 
 fica aberta por padrão e reúne NPCs, monstros, ordem, reset e ações das ameaças,
 inclusive quando o mestre não selecionou uma ficha pessoal. Esses controles são
 os mesmos da aba Combate e ficam ocultos para jogadores e na prévia.
+Durante a prévia, “Voltar à visão do mestre” restaura a visão e os controles
+diretamente no painel de combate.
 A gaveta “Ações e ficha na mesa” fica reservada ao personagem selecionado e
 renderiza recursos, habilidades, perícias, rituais e inventário.
 Não adiciona novas regras de dados,
