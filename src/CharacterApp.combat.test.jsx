@@ -42,7 +42,8 @@ async function openTable() {
   await screen.findByDisplayValue('Agent A');
   fireEvent.click(screen.getByText('Confirmar missão e personagem'));
   fireEvent.click(await screen.findByTitle('Mesa virtual'));
-  fireEvent.click(await screen.findByRole('button',{name:'Abrir combate'}));
+  // The first visit loads the tabletop chunk; wait for the route to be ready on CI.
+  fireEvent.click(await screen.findByRole('button',{name:'Abrir combate'},{timeout:5000}));
   await screen.findByRole('dialog',{name:'Combate'});
   await screen.findByText('Combate · Rodada 3');
 }
