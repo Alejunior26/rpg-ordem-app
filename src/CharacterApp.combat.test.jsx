@@ -136,3 +136,22 @@ it('executes the original ability handler from the table and reports a rejected 
   expect(screen.getByRole('region',{name:'Mesa virtual'})).toBeTruthy();
   alert.mockRestore();
 });
+
+it('shows revised monster actions and their conditions for an old saved encounter and logs the revised text', async () => {
+  fake.role = 'dm';
+  const legacy = { id: 'maestro', actions: [{ name: 'Fechar o Palco', type: 'Completa', text: 'Texto antigo: convoca 1 Portador em 1d3 rodadas.' }] };
+  fake.state.participants = [{ userId: 'monster:maestro:legacy', nome: 'Maestro em cena', kind: 'monster', monsterId: 'maestro', monster: legacy }];
+  const before = JSON.stringify(fake.state.participants);
+  await openTable();
+  expect(screen.queryByText(/Texto antigo:/)).toBeNull();
+  const button = screen.getByRole('button', { name: 'Usar Fechar o Palco de Maestro em cena' });
+  const card = button.closest('.combat-monster-action');
+  expect(card.textContent).toContain('Não causa dano, não atordoa e não convoca Portadores');
+  expect(card.textContent).toContain('Tecnologia DT 20');
+  expect(card.querySelector('summary').textContent).toContain('Ver condições: Cego');
+  expect(card.querySelector('details').textContent).toContain('50% de chance de erro');
+  fireEvent.click(button);
+  await waitFor(() => expect(fake.logs.some((log) => log.acao.includes('Fechar o Palco') && log.acao.includes('não convoca Portadores'))).toBe(true));
+  expect(JSON.stringify(fake.state.participants)).toBe(before);
+  expect(fake.rpc.mock.calls.some(([name, args]) => name === 'asa_combat_action' && args.p_event !== 'READ')).toBe(false);
+});

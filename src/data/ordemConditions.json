@@ -1,0 +1,272 @@
+{
+  "edition": "v6 / Ordem Paranormal RPG 1.3",
+  "reference": "Ordem Paranormal RPG, livro de regras v1.3, exemplar fornecido pelo mestre",
+  "conditions": [
+    {
+      "id": "abalado",
+      "name": "Abalado",
+      "kind": "medo",
+      "summary": "-1d20 nos testes. Uma nova aplicação transforma a condição em Apavorado.",
+      "source_page": 310
+    },
+    {
+      "id": "agarrado",
+      "name": "Agarrado",
+      "kind": "paralisia",
+      "summary": "Fica Desprevenido e Imóvel; ataques perdem 1d20 e só podem usar armas leves. Disparos contra envolvidos no agarrão têm 50% de chance de atingir a pessoa errada. Para escapar, gaste uma ação padrão e vença o teste de manobra oposto (p. 85).",
+      "source_page": 310
+    },
+    {
+      "id": "alquebrado",
+      "name": "Alquebrado",
+      "kind": "mental",
+      "summary": "Habilidades e rituais custam 1 PE adicional.",
+      "source_page": 310
+    },
+    {
+      "id": "apavorado",
+      "name": "Apavorado",
+      "kind": "medo",
+      "summary": "-2d20 nos testes de perícia e deve fugir da fonte do medo. Pode parar de fugir ao perdê-la de vista ou ficar a mais de 18 m dela. Se não houver como fugir, pode agir, mas não se aproximar voluntariamente da fonte.",
+      "source_page": 310
+    },
+    {
+      "id": "asfixiado",
+      "name": "Asfixiado",
+      "kind": "",
+      "summary": "Sem respirar: sustenta o fôlego por tantas rodadas quanto seu Vigor. Depois, testa Fortitude a cada rodada, DT 5 +5 por teste anterior. Uma falha deixa Inconsciente e causa perda de 1d6 PV por rodada até voltar a respirar ou morrer.",
+      "source_page": 310
+    },
+    {
+      "id": "atordoado",
+      "name": "Atordoado",
+      "kind": "mental",
+      "summary": "Fica Desprevenido e não realiza ações. Reações comuns continuam possíveis pela regra da p. 85; não confundir com Inconsciente. As reações especiais de defesa têm suas próprias restrições.",
+      "source_page": 310
+    },
+    {
+      "id": "caido",
+      "name": "Caído",
+      "kind": "",
+      "summary": "Deslocamento de 1,5 m e -2d20 em ataques corpo a corpo. Defesa -5 contra ataques corpo a corpo e +5 contra ataques à distância. Levantar-se custa uma ação de movimento (p. 87).",
+      "source_page": 310
+    },
+    {
+      "id": "cego",
+      "name": "Cego",
+      "kind": "sentidos",
+      "summary": "Fica Desprevenido e Lento; não pode observar com Percepção e perde 2d20 em perícias de Agilidade ou Força. Seus alvos têm camuflagem total: 50% de chance de erro no ataque (1-5 em 1d10, p. 89). Escuridão total causa essa condição a quem não possui um meio de perceber no escuro; ela cessa ao voltar a enxergar.",
+      "source_page": 310
+    },
+    {
+      "id": "confuso",
+      "name": "Confuso",
+      "kind": "mental",
+      "summary": "No início de cada turno, role 1d6: 1, move-se numa direção sorteada em 1d8; 2-3, balbucia sem realizar ações; 4-5, ataca o ser mais próximo com a arma empunhada, ou a si próprio se estiver sozinho (nesse caso, role apenas o dano); 6, encerra a condição e age normalmente.",
+      "source_page": 310
+    },
+    {
+      "id": "debilitado",
+      "name": "Debilitado",
+      "kind": "",
+      "summary": "-2d20 nos testes de Agilidade, Força e Vigor. Nova aplicação deixa Inconsciente.",
+      "source_page": 310
+    },
+    {
+      "id": "desprevenido",
+      "name": "Desprevenido",
+      "kind": "",
+      "summary": "Defesa -5 e -1d20 em Reflexos. Também se aplica contra inimigos que o personagem não consegue perceber.",
+      "source_page": 310
+    },
+    {
+      "id": "doente",
+      "name": "Doente",
+      "kind": "",
+      "summary": "Aplica os efeitos e a duração da doença específica; o nome sozinho não determina uma penalidade.",
+      "source_page": 310
+    },
+    {
+      "id": "em-chamas",
+      "name": "Em Chamas",
+      "kind": "",
+      "summary": "Sofre 1d6 de dano de fogo no início de cada turno. Uma ação padrão para apagar com as mãos, ou imersão em água, encerra as chamas.",
+      "source_page": 310
+    },
+    {
+      "id": "enjoado",
+      "name": "Enjoado",
+      "kind": "",
+      "summary": "A cada rodada, só pode executar uma ação padrão ou uma de movimento; não pode executar ambas.",
+      "source_page": 310
+    },
+    {
+      "id": "enlouquecendo",
+      "name": "Enlouquecendo",
+      "kind": "",
+      "summary": "Com SAN 0. Ao iniciar o terceiro turno nessa condição na mesma cena, mesmo em ocorrências separadas, torna-se insano e passa ao controle do mestre. Acalmar exige ação padrão, Diplomacia treinada e DT 20 +5 por vez já acalmado na cena; sucesso deixa com 1 SAN. Recuperar pelo menos 1 SAN também encerra a condição (p. 44).",
+      "source_page": 310
+    },
+    {
+      "id": "enredado",
+      "name": "Enredado",
+      "kind": "paralisia",
+      "summary": "Fica Lento e Vulnerável, com -1d20 nos ataques. A habilidade ou obstáculo que prendeu o alvo deve explicar como ele se solta.",
+      "source_page": 311
+    },
+    {
+      "id": "envenenado",
+      "name": "Envenenado",
+      "kind": "",
+      "summary": "Siga o veneno: ele define dano, condição e duração. Na ausência de duração, termina com a cena. Danos recorrentes de veneno acumulam mesmo quando o veneno ou sua fonte se repete.",
+      "source_page": 311
+    },
+    {
+      "id": "esmorecido",
+      "name": "Esmorecido",
+      "kind": "mental",
+      "summary": "-2d20 em testes de Intelecto e Presença.",
+      "source_page": 311
+    },
+    {
+      "id": "exausto",
+      "name": "Exausto",
+      "kind": "fadiga",
+      "summary": "Fica Debilitado, Lento e Vulnerável. Uma nova aplicação deixa Inconsciente.",
+      "source_page": 311
+    },
+    {
+      "id": "fascinado",
+      "name": "Fascinado",
+      "kind": "mental",
+      "summary": "-2d20 em Percepção e só pode observar aquilo que prendeu sua atenção. Uma ação hostil contra ele encerra o efeito; outra pessoa também pode despertá-lo com uma ação padrão.",
+      "source_page": 311
+    },
+    {
+      "id": "fatigado",
+      "name": "Fatigado",
+      "kind": "fadiga",
+      "summary": "Fica Fraco e Vulnerável. Uma nova aplicação transforma a condição em Exausto.",
+      "source_page": 311
+    },
+    {
+      "id": "fraco",
+      "name": "Fraco",
+      "kind": "",
+      "summary": "-1d20 nos testes de Agilidade, Força e Vigor. Uma nova aplicação transforma a condição em Debilitado.",
+      "source_page": 311
+    },
+    {
+      "id": "frustrado",
+      "name": "Frustrado",
+      "kind": "mental",
+      "summary": "-1d20 nos testes de Intelecto e Presença. Uma nova aplicação transforma a condição em Esmorecido.",
+      "source_page": 311
+    },
+    {
+      "id": "imovel",
+      "name": "Imóvel",
+      "kind": "paralisia",
+      "summary": "Todos os deslocamentos se tornam 0 m. Isso, sozinho, não retira as demais ações.",
+      "source_page": 311
+    },
+    {
+      "id": "inconsciente",
+      "name": "Inconsciente",
+      "kind": "",
+      "summary": "Fica Indefeso e não realiza ações nem reações. Acordar alguém por estímulo físico exige uma ação padrão; respeite a causa da inconsciência, como PV 0 ou um efeito específico.",
+      "source_page": 311
+    },
+    {
+      "id": "indefeso",
+      "name": "Indefeso",
+      "kind": "",
+      "summary": "É considerado Desprevenido, mas sua penalidade na Defesa é -10. Falha automaticamente em Reflexos e pode receber golpe de misericórdia.",
+      "source_page": 311
+    },
+    {
+      "id": "lento",
+      "name": "Lento",
+      "kind": "paralisia",
+      "summary": "Reduza todos os deslocamentos à metade, arredondando para baixo até um múltiplo de 1,5 m. Não pode correr nem fazer investida. Não perde sua ação padrão ou de movimento por esse motivo.",
+      "source_page": 311
+    },
+    {
+      "id": "machucado",
+      "name": "Machucado",
+      "kind": "",
+      "summary": "PV atuais iguais ou inferiores à metade do máximo. Não impõe penalidade por si só.",
+      "source_page": 311
+    },
+    {
+      "id": "morrendo",
+      "name": "Morrendo",
+      "kind": "",
+      "summary": "Adquirida ao chegar a PV 0. Ao iniciar o terceiro turno Morrendo na mesma cena, mesmo em ocorrências separadas, morre. Primeiros Socorros exige ação padrão e Medicina DT 20 +5 por estabilização anterior na cena; no alvo inconsciente e morrendo, remove ambas as condições e deixa com 1 PV (p. 46). Um efeito que explicitamente estabilize também funciona; apenas curar PV não substitui isso.",
+      "source_page": 311
+    },
+    {
+      "id": "ofuscado",
+      "name": "Ofuscado",
+      "kind": "sentidos",
+      "summary": "-1d20 em testes de ataque e de Percepção.",
+      "source_page": 311
+    },
+    {
+      "id": "paralisado",
+      "name": "Paralisado",
+      "kind": "paralisia",
+      "summary": "Fica Imóvel e Indefeso, podendo executar apenas ações puramente mentais.",
+      "source_page": 311
+    },
+    {
+      "id": "pasmo",
+      "name": "Pasmo",
+      "kind": "mental",
+      "summary": "Não realiza ações. Não recebe automaticamente a penalidade de Desprevenido de Atordoado.",
+      "source_page": 311
+    },
+    {
+      "id": "perturbado",
+      "name": "Perturbado",
+      "kind": "",
+      "summary": "SAN abaixo da metade do máximo (p. 88). Na primeira ocorrência na cena, recebe um efeito de insanidade da referência da p. 111; isso orienta interpretação, sem penalidade genérica inventada.",
+      "source_page": 311
+    },
+    {
+      "id": "petrificado",
+      "name": "Petrificado",
+      "kind": "",
+      "summary": "Fica Inconsciente e recebe RD 10.",
+      "source_page": 311
+    },
+    {
+      "id": "sangrando",
+      "name": "Sangrando",
+      "kind": "",
+      "summary": "No início de seu turno, teste Vigor DT 20: sucesso encerra; falha causa perda de 1d6 PV e mantém Sangrando. Outra pessoa pode estabilizar o sangramento com ação completa e Medicina DT 20.",
+      "source_page": 311
+    },
+    {
+      "id": "surdo",
+      "name": "Surdo",
+      "kind": "sentidos",
+      "summary": "Não pode ouvir com Percepção e perde 2d20 em Iniciativa. Conjurar rituais conta como condição ruim (consulte a p. 119).",
+      "source_page": 311
+    },
+    {
+      "id": "surpreendido",
+      "name": "Surpreendido",
+      "kind": "",
+      "summary": "Fica Desprevenido e não realiza ações. A surpresa normal afeta apenas a primeira rodada do combate (p. 83); apagar luzes no meio da luta não recria essa rodada.",
+      "source_page": 311
+    },
+    {
+      "id": "vulneravel",
+      "name": "Vulnerável",
+      "kind": "",
+      "summary": "Defesa -2. A penalidade não é -5 e não significa sofrer dano dobrado: isso é a habilidade Vulnerabilidade, uma regra diferente.",
+      "source_page": 311
+    }
+  ]
+}
