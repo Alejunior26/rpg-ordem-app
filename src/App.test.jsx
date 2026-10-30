@@ -3,7 +3,8 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
-const fake=vi.hoisted(()=>({ user:{id:'00000000-0000-4000-8000-000000000001',email:'admin@example.test'},rpc:vi.fn(),queries:[] }));
+const fake=vi.hoisted(()=>({ user:{id:'00000000-0000-4000-8000-000000000001',email:'admin@example.test'},rpc:vi.fn(),queries:[],noCharacters:false }));
+vi.mock('./components/VirtualTabletop',()=>({default:({missionId})=><div data-testid="virtual-tabletop">Mesa: {missionId}</div>}));
 vi.mock('./auth/AuthProvider',()=>({useAuth:()=>({user:fake.user,role:'admin',loading:false,signOut:vi.fn()})}));
 vi.mock('./hooks/useMissionCombat',()=>({useMissionCombat:()=>({state:null,logs:[],error:'',refresh:vi.fn(),action:vi.fn(),appendLogs:vi.fn()})}));
 vi.mock('./lib/supabase',()=>({supabase:{
@@ -17,15 +18,26 @@ vi.mock('./lib/supabase',()=>({supabase:{
         {id:'00000000-0000-4000-8000-000000000021',owner_id:fake.user.id,name:'Agent B',mission_id:mission.id,revision:0,sheet_json:{nomePersonagem:'Agent B',pvAtual:17,setupComplete:true}},
         {id:'00000000-0000-4000-8000-000000000022',owner_id:'foreign-owner',name:'Foreign Agent',mission_id:mission.id,revision:0,sheet_json:{nomePersonagem:'Foreign Agent',pvAtual:99,setupComplete:true}},
       ];
-      let data=table==='missions'?[mission]:table==='characters'?chars:[];
+      let data=table==='missions'?[mission]:table==='characters'?(fake.noCharacters?[]:chars):[];
       for(const [key,value] of query.filters) data=data.filter(x=>x[key]===value);
       return Promise.resolve({data,error:null}).then(resolve);
     }};return builder;
   },
 }}));
-beforeEach(()=>{ window.localStorage.clear(); fake.queries.length=0;fake.rpc.mockReset();fake.rpc.mockImplementation(async(name,args)=>({data:name==='asa_save_character'?{revision:args.p_expected_revision+1}:null,error:null}));});
+beforeEach(()=>{ window.localStorage.clear(); fake.noCharacters=false; fake.queries.length=0;fake.rpc.mockReset();fake.rpc.mockImplementation(async(name,args)=>({data:name==='asa_save_character'?{revision:args.p_expected_revision+1}:null,error:null}));});
 afterEach(cleanup);
 describe('character switching in the real application',()=>{
+  it('lets a master open the selected mission tabletop without creating a personal character',async()=>{
+    fake.noCharacters=true;
+    render(<App/>);
+    const open=await screen.findByRole('button',{name:'Abrir mesa virtual como mestre'});
+    await screen.findByRole('option',{name:'Missão A'});
+    fireEvent.change(screen.getByRole('combobox'),{target:{value:'00000000-0000-4000-8000-000000000010'}});
+    await waitFor(()=>expect(open.disabled).toBe(false));
+    fireEvent.click(open);
+    expect((await screen.findByTestId('virtual-tabletop')).textContent).toContain('00000000-0000-4000-8000-000000000010');
+    expect(fake.rpc.mock.calls.some(([name])=>name==='asa_save_character')).toBe(false);
+  });
   it('keeps the administrator personal picker scoped to the owner and saves B then A with their own values',async()=>{
     render(<App/>);
     await screen.findByDisplayValue('Agent A');
