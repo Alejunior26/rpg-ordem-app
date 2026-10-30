@@ -42,6 +42,8 @@ async function openTable() {
   await screen.findByDisplayValue('Agent A');
   fireEvent.click(screen.getByText('Confirmar missão e personagem'));
   fireEvent.click(await screen.findByTitle('Mesa virtual'));
+  fireEvent.click(await screen.findByRole('button',{name:'Abrir combate'}));
+  await screen.findByRole('dialog',{name:'Combate'});
   await screen.findByText('Combate · Rodada 3');
 }
 it('shares the real app combat state between table and combat tab; JOIN forwards the owned character', async () => {
@@ -52,9 +54,11 @@ it('shares the real app combat state between table and combat tab; JOIN forwards
   expect(join).toMatchObject({p_mission_id:missionId,p_expected_version:1,p_payload:{userId,characterId}});
   fireEvent.click(await screen.findByRole('button',{name:'Finalizar meu turno'}));
   await screen.findByRole('button',{name:'Turno já finalizado'});
+  fireEvent.click(screen.getByRole('button',{name:'Fechar combate'}));
   fireEvent.click(screen.getByTitle('Mesa de Combate'));
   expect(await screen.findByText('Finalizou o turno.')).toBeTruthy();
   fireEvent.click(screen.getByTitle('Mesa virtual'));
+  fireEvent.click(await screen.findByRole('button',{name:'Abrir combate'}));
   await screen.findByRole('button',{name:'Turno já finalizado'});
   expect(fake.channels.filter(ch=>ch.name===`combat:${missionId}`)).toHaveLength(1);
 });
@@ -68,7 +72,6 @@ it('updates the table after a remote mission Realtime invalidation without anoth
 });
 it('opens the original character controls inside the table without navigating away', async () => {
   await openTable();
-  fireEvent.click(screen.getByText('Ações e ficha na mesa'));
   fireEvent.change(screen.getByLabelText('Área de ação'),{target:{value:'status'}});
   expect(await screen.findByText('A.S.A. BIO-MONITOR')).toBeTruthy();
   expect(screen.getByRole('region',{name:'Mesa virtual'})).toBeTruthy();
@@ -91,6 +94,7 @@ it.each(['dm', 'admin'])('lets a %s without a personal character add an NPC and 
   await screen.findByRole('option',{name:'Missão de teste'});
   fireEvent.change(screen.getByLabelText('Missão'),{target:{value:missionId}});
   fireEvent.click(await screen.findByRole('button',{name:'Abrir mesa virtual como mestre'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Abrir combate'}));
   const direction=await screen.findByText('Direção do combate (Mestre)');
   expect(direction.closest('details').open).toBe(true);
   expect(screen.queryByText('Ações e ficha na mesa')).toBeNull();
@@ -118,7 +122,6 @@ it('executes the original ability handler from the table and reports a rejected 
   await openTable();
   fireEvent.click(screen.getByRole('button',{name:'Entrar no combate'}));
   await screen.findByRole('button',{name:'Finalizar meu turno'});
-  fireEvent.click(screen.getByText('Ações e ficha na mesa'));
   fireEvent.change(screen.getByLabelText('Área de ação'),{target:{value:'classe'}});
   fake.logError={code:'42501'};
   fireEvent.click(screen.getAllByText('ENVIAR PRO LOG')[0]);

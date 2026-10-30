@@ -14,8 +14,10 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
   const ownTurn = view.currentId === userId && !done.includes(userId);
   const locked = combat.busy || combat.logBusy || !state || preview;
   const canAdvance = state?.turn_order?.length > 0 && state.turn_order.every((id) => done.includes(id));
-  return <details className="vt-card vt-combat" open>
-    <summary>Combate · Rodada {state?.rodada || '—'}</summary>
+  return <section className="vt-card vt-combat">
+    <h3>Combate · Rodada {state?.rodada || '—'}</h3>
+    <div className="vt-combat-grid">
+    <div className="vt-combat-overview">
     <p className="vt-combat-mode">{preview ? 'Prévia dos jogadores' : privileged ? 'Visão do mestre' : 'Visão do jogador'}</p>
     {preview && manager && onExitPreview && <button type="button" onClick={onExitPreview}>Voltar à visão do mestre</button>}
     {combat.error && <div role="alert" className="vt-alert">{combat.error}<button type="button" onClick={() => combat.refresh()}>Reconectar combate</button></div>}
@@ -42,13 +44,15 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
       </div>}
     </>}
     {combat.busy && <p role="status">Salvando ação…</p>}
+    </div>
+    <div className="vt-combat-workspace">
     {privileged && renderCombatDirection && <details className="vt-combat-direction" open>
       <summary>Direção do combate (Mestre)</summary>
       <fieldset disabled={locked} className="vt-action-content">
         {renderCombatDirection()}
       </fieldset>
     </details>}
-    {!preview && character?.id && renderCharacterPanel && <details className="vt-action-drawer">
+    {!preview && character?.id && renderCharacterPanel && <details className="vt-action-drawer" open={!manager}>
       <summary>Ações e ficha na mesa</summary>
       <label>Área de ação<select aria-label="Área de ação" value={actionTab} onChange={(e) => setActionTab(e.target.value)}>
         {character?.id && <>
@@ -71,5 +75,7 @@ export default function TabletopCombatPanel({ combat, manager, preview, userId, 
       <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'Recolher histórico' : 'Expandir histórico'}</button>
       {expanded && combat.hasMoreLogs && <button type="button" disabled={combat.historyBusy} onClick={combat.loadMoreLogs}>Carregar ações anteriores</button>}
     </details>
-  </details>;
+    </div>
+    </div>
+  </section>;
 }

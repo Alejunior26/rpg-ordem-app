@@ -127,7 +127,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 9998,
+    zIndex: 10010,
     padding: "20px",
   },
   popupBox: {
