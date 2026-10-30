@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useTabletop } from "../hooks/useTabletop";
 import {
@@ -64,6 +64,24 @@ export function TabletopView({
   const [importProgress, setImportProgress] = useState(null),
     [localError, setLocalError] = useState("");
   const importCancel = useRef(false);
+  const stage = useRef(null),
+    masterView = useRef(null),
+    restoreView = useRef(false);
+  useLayoutEffect(() => {
+    if (preview || !restoreView.current || !masterView.current) return;
+    restoreView.current = false;
+    const saved = masterView.current;
+    if (stage.current) {
+      stage.current.scrollLeft = saved.left;
+      stage.current.scrollTop = saved.top;
+    }
+    if (window.scrollX !== saved.windowX || window.scrollY !== saved.windowY)
+      window.scrollTo({
+        left: saved.windowX,
+        top: saved.windowY,
+        behavior: "instant",
+      });
+  }, [preview]);
   useEffect(
     () => () => {
       importCancel.current = true;
@@ -86,6 +104,32 @@ export function TabletopView({
   const maps = table.assets.filter((a) => a.kind === "map"),
     art = table.assets.filter((a) => a.kind === "token");
   const disabled = table.busy || Boolean(importProgress);
+  function togglePreview(checked) {
+    if (checked) {
+      masterView.current = {
+        sceneId: scene?.id || "",
+        selectedId,
+        zoom,
+        tool,
+        left: stage.current?.scrollLeft || 0,
+        top: stage.current?.scrollTop || 0,
+        windowX: window.scrollX,
+        windowY: window.scrollY,
+      };
+      // Pin the actual GM scene even if the active scene changes during preview.
+      setSelectedScene(scene?.id || "");
+      setTool("move");
+      setSelectedId(null);
+    } else if (masterView.current) {
+      const saved = masterView.current;
+      setSelectedScene(saved.sceneId);
+      setSelectedId(saved.selectedId);
+      setZoom(saved.zoom);
+      setTool(saved.tool);
+      restoreView.current = true;
+    }
+    setPreview(checked);
+  }
   async function createScene(event) {
     event.preventDefault();
     setLocalError("");
@@ -295,7 +339,7 @@ export function TabletopView({
               </label>
             </div>
           </div>
-          <div className="vt-stage">
+          <div className="vt-stage" ref={stage}>
             <div className="vt-map-size" style={{ width: `${zoom}%` }}>
               <TabletopBoard
                 key={scene?.id || "empty"}
@@ -377,11 +421,7 @@ export function TabletopView({
                 <input
                   type="checkbox"
                   checked={preview}
-                  onChange={(e) => {
-                    setPreview(e.target.checked);
-                    setTool("move");
-                    setSelectedId(null);
-                  }}
+                  onChange={(e) => togglePreview(e.target.checked)}
                 />
                 Prévia dos jogadores
               </label>
@@ -613,8 +653,8 @@ export function TabletopView({
           )}
         </aside>
       </div>
-      {manager && !preview && (
-        <div className="vt-preparation">
+      {manager && (
+        <div className="vt-preparation" hidden={preview}>
           <details className="vt-card">
             <summary>+ Novo cenário</summary>
             <form onSubmit={createScene} className="vt-form">

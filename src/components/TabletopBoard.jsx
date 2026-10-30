@@ -1,10 +1,14 @@
-import React, { useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import {
   canMoveToken,
   fogRectangle,
   snapPosition,
   tokenInFog,
 } from "../domain/tabletop";
+
+// Keep SVG text in normal pixel-sized units. Fractional font sizes in a
+// one-unit-per-cell viewBox can be enlarged by the browser's minimum font size.
+const CELL = 64;
 
 export default function TabletopBoard({
   scene,
@@ -25,13 +29,22 @@ export default function TabletopBoard({
   const [draft, setDraft] = useState(null),
     [ruler, setRuler] = useState(null);
   const gridId = useId().replaceAll(":", "");
+  useEffect(() => {
+    gesture.current = null;
+    setDraft(null);
+    setRuler(null);
+  }, [scene?.id, tool, preview]);
   if (!scene)
     return (
       <div className="vt-empty">
         <span className="vt-empty-icon">◇</span>
-        <h3>{manager ? "Prepare o próximo cenário" : "Aguardando o mestre"}</h3>
+        <h3>
+          {manager && !preview
+            ? "Prepare o próximo cenário"
+            : "Aguardando o mestre"}
+        </h3>
         <p>
-          {manager
+          {manager && !preview
             ? "Escolha uma cena ou crie um cenário para começar."
             : "Quando o mestre liberar uma cena, o mapa aparecerá aqui."}
         </p>
@@ -44,15 +57,33 @@ export default function TabletopBoard({
   );
   function point(event) {
     const rect = svg.current.getBoundingClientRect();
+    if (
+      !rect.width ||
+      !rect.height ||
+      !Number.isFinite(event.clientX) ||
+      !Number.isFinite(event.clientY)
+    )
+      return null;
     return {
       x: ((event.clientX - rect.left) / rect.width) * scene.columns,
       y: ((event.clientY - rect.top) / rect.height) * scene.rows,
     };
   }
   function capture(event, type, token) {
-    if (busy) return;
+    if (
+      busy ||
+      gesture.current ||
+      event.button !== 0 ||
+      event.isPrimary === false
+    )
+      return;
     const start = point(event);
+    if (!start) return;
+    // This is a pointer gesture, so suppress native image/text dragging and
+    // automatic SVG focus scrolling while the token is under the pointer.
+    event.preventDefault();
     gesture.current = {
+      pointerId: event.pointerId,
       type,
       token,
       start,
@@ -64,8 +95,9 @@ export default function TabletopBoard({
   }
   function motion(event) {
     const g = gesture.current;
-    if (!g) return;
+    if (!g || g.pointerId !== event.pointerId) return;
     const end = point(event);
+    if (!end) return;
     if (g.type === "token")
       setDraft({
         id: g.token.id,
@@ -81,11 +113,12 @@ export default function TabletopBoard({
   }
   async function finish(event) {
     const g = gesture.current;
-    if (!g) return;
+    if (!g || g.pointerId !== event.pointerId) return;
     gesture.current = null;
     svg.current.releasePointerCapture?.(event.pointerId);
     const end = point(event);
     try {
+      if (!end) return;
       if (g.type === "token") {
         const next = snapPosition(
           end.x - g.offset.x + 0.5,
@@ -100,6 +133,11 @@ export default function TabletopBoard({
     } finally {
       setDraft(null);
     }
+  }
+  function cancel(event) {
+    if (gesture.current?.pointerId !== event.pointerId) return;
+    gesture.current = null;
+    setDraft(null);
   }
   function keyMove(event, token) {
     const direction = {
@@ -136,7 +174,7 @@ export default function TabletopBoard({
     <svg
       ref={svg}
       className={`vt-board vt-tool-${tool}`}
-      viewBox={`0 0 ${scene.columns} ${scene.rows}`}
+      viewBox={`0 0 ${scene.columns * CELL} ${scene.rows * CELL}`}
       role="application"
       aria-label={`Mapa: ${scene.name}. Selecione um token e use as setas para movê-lo.`}
       style={{ aspectRatio: `${scene.columns}/${scene.rows}` }}
@@ -147,35 +185,43 @@ export default function TabletopBoard({
       }}
       onPointerMove={motion}
       onPointerUp={finish}
-      onPointerCancel={() => {
-        gesture.current = null;
-        setDraft(null);
-      }}
+      onPointerCancel={cancel}
+      onLostPointerCapture={cancel}
+      onDragStart={(event) => event.preventDefault()}
     >
       <defs>
-        <pattern id={gridId} width="1" height="1" patternUnits="userSpaceOnUse">
+        <pattern
+          id={gridId}
+          width={CELL}
+          height={CELL}
+          patternUnits="userSpaceOnUse"
+        >
           <path
-            d="M1 0H0V1"
+            d={`M${CELL} 0H0V${CELL}`}
             fill="none"
             stroke="#c5cced"
-            strokeWidth=".018"
+            strokeWidth={CELL * 0.018}
             opacity=".34"
           />
         </pattern>
       </defs>
-      <rect width={scene.columns} height={scene.rows} fill="#111a2d" />
+      <rect
+        width={scene.columns * CELL}
+        height={scene.rows * CELL}
+        fill="#111a2d"
+      />
       {(images[scene.map_path] || scene.map_url) && (
         <image
           href={images[scene.map_path] || scene.map_url}
-          width={scene.columns}
-          height={scene.rows}
+          width={scene.columns * CELL}
+          height={scene.rows * CELL}
           preserveAspectRatio="none"
         />
       )}
       {scene.grid_visible && (
         <rect
-          width={scene.columns}
-          height={scene.rows}
+          width={scene.columns * CELL}
+          height={scene.rows * CELL}
           fill={`url(#${gridId})`}
           pointerEvents="none"
         />
@@ -187,7 +233,7 @@ export default function TabletopBoard({
         return (
           <g
             key={token.id}
-            transform={`translate(${p.x} ${p.y})`}
+            transform={`translate(${p.x * CELL} ${p.y * CELL})`}
             tabIndex={0}
             role="button"
             aria-label={`${token.name}${token.visible ? "" : " (oculto)"}${movable ? ", movível" : ""}`}
@@ -209,31 +255,33 @@ export default function TabletopBoard({
             onKeyDown={(e) => keyMove(e, token)}
           >
             <circle
-              cx={token.size / 2}
-              cy={token.size / 2}
-              r={token.size * 0.47}
+              cx={(token.size * CELL) / 2}
+              cy={(token.size * CELL) / 2}
+              r={token.size * CELL * 0.47}
               fill="#111520"
               stroke={selectedId === token.id ? "#ffffff" : token.color}
-              strokeWidth={selectedId === token.id ? 0.07 : 0.045}
-              strokeDasharray={token.visible ? undefined : ".12 .08"}
+              strokeWidth={CELL * (selectedId === token.id ? 0.07 : 0.045)}
+              strokeDasharray={
+                token.visible ? undefined : `${CELL * 0.12} ${CELL * 0.08}`
+              }
             />
             {image ? (
               <image
                 href={image}
-                x={0.06}
-                y={0.02}
-                width={token.size - 0.12}
-                height={token.size - 0.08}
+                x={CELL * 0.06}
+                y={CELL * 0.02}
+                width={CELL * (token.size - 0.12)}
+                height={CELL * (token.size - 0.08)}
                 preserveAspectRatio="xMidYMid meet"
                 pointerEvents="none"
               />
             ) : (
               <text
-                x={token.size / 2}
-                y={token.size * 0.65}
+                x={(token.size * CELL) / 2}
+                y={token.size * CELL * 0.65}
                 textAnchor="middle"
                 fill={token.color}
-                fontSize={token.size * 0.48}
+                fontSize={token.size * CELL * 0.48}
                 fontWeight="bold"
                 pointerEvents="none"
               >
@@ -241,14 +289,14 @@ export default function TabletopBoard({
               </text>
             )}
             <text
-              x={token.size / 2}
-              y={token.size + 0.25}
+              x={(token.size * CELL) / 2}
+              y={CELL * (token.size + 0.25)}
               textAnchor="middle"
               fill="#fff"
               stroke="#080a14"
-              strokeWidth=".055"
+              strokeWidth={CELL * 0.055}
               paintOrder="stroke"
-              fontSize=".25"
+              fontSize={CELL * 0.25}
               pointerEvents="none"
             >
               {token.name.slice(0, 24)}
@@ -259,45 +307,48 @@ export default function TabletopBoard({
       {(scene.fog || []).map((f, i) => (
         <rect
           key={i}
-          {...{ x: f.x, y: f.y, width: f.w, height: f.h }}
+          x={f.x * CELL}
+          y={f.y * CELL}
+          width={f.w * CELL}
+          height={f.h * CELL}
           fill="#080a14"
           opacity={manager && !preview ? 0.65 : 1}
           stroke={manager && !preview ? "#a58ad4" : undefined}
-          strokeWidth=".035"
+          strokeWidth={CELL * 0.035}
           pointerEvents="none"
         />
       ))}
       {draft?.fog && (
         <rect
-          x={draft.fog.x}
-          y={draft.fog.y}
-          width={draft.fog.w}
-          height={draft.fog.h}
+          x={draft.fog.x * CELL}
+          y={draft.fog.y * CELL}
+          width={draft.fog.w * CELL}
+          height={draft.fog.h * CELL}
           fill="#bc88ff"
           fillOpacity=".35"
           stroke="#e2c9ff"
-          strokeWidth=".06"
+          strokeWidth={CELL * 0.06}
           pointerEvents="none"
         />
       )}
       {ruler && (
         <g pointerEvents="none">
           <line
-            x1={ruler.start.x}
-            y1={ruler.start.y}
-            x2={ruler.end.x}
-            y2={ruler.end.y}
+            x1={ruler.start.x * CELL}
+            y1={ruler.start.y * CELL}
+            x2={ruler.end.x * CELL}
+            y2={ruler.end.y * CELL}
             stroke="#ffe08c"
-            strokeWidth=".07"
+            strokeWidth={CELL * 0.07}
           />
           <text
-            x={ruler.end.x}
-            y={Math.max(0.4, ruler.end.y - 0.3)}
+            x={ruler.end.x * CELL}
+            y={Math.max(0.4, ruler.end.y - 0.3) * CELL}
             fill="#fff3c1"
             stroke="#080a14"
-            strokeWidth=".04"
+            strokeWidth={CELL * 0.04}
             paintOrder="stroke"
-            fontSize=".4"
+            fontSize={CELL * 0.4}
           >
             {(
               Math.hypot(
