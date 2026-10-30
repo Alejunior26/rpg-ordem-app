@@ -1,9 +1,15 @@
 # Combate junto ao mapa
 
-A coluna esquerda reúne o mapa, as ferramentas logo abaixo dele, as opções da
-cena, os tokens e a preparação. A lateral direita fica reservada ao combate,
-com rolagem independente. Em telas pequenas, o combate vem logo depois do mapa,
-seguido pelas opções e pela preparação.
+O mapa ocupa a largura disponível, com as ferramentas, opções da cena, tokens
+e preparação abaixo dele. “Abrir combate”, no cabeçalho do mapa, abre uma janela
+ampla sobre a mesa: iniciativa e turnos de um lado, direção e ações do outro.
+Em telas pequenas, essas áreas ficam em uma coluna.
+
+“Voltar ao mapa” ou Esc fecha a janela. A aba de ação, os campos preenchidos e a
+rolagem ficam preservados ao reabrir, e os pedidos em andamento continuam. O foco
+volta ao botão de abrir. Localizar um participante fecha a janela e centraliza
+seu token autorizado no mapa. As janelas de detalhes de itens e rituais continuam
+acima da janela de combate.
 
 As artes funcionam como miniaturas em pé: a base marca o espaço ocupado no chão,
 e a imagem inteira se estende para cima, ancorada no centro dessa base. O controle

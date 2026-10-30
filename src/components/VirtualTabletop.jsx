@@ -9,6 +9,7 @@ import {
   tokenIsVisible,
 } from "../domain/tabletop";
 import TabletopCombatPanel from "./TabletopCombatPanel";
+import TabletopCombatDialog from "./TabletopCombatDialog";
 import { participantToken, tabletopCombatView } from "../domain/tabletopCombat";
 import TabletopBoard from "./TabletopBoard";
 import TabletopViewport from "./TabletopViewport";
@@ -62,7 +63,8 @@ export function TabletopView({
   ...combatControls
 }) {
   const [selectedScene, setSelectedScene] = useState(""),
-    [selectedId, setSelectedId] = useState(null);
+    [selectedId, setSelectedId] = useState(null),
+    [combatOpen, setCombatOpen] = useState(false);
   const [preview, setPreview] = useState(false),
     [zoom, setZoom] = useState(100),
     [tokenArtScale, setTokenArtScale] = useState(2.5),
@@ -110,6 +112,7 @@ export function TabletopView({
   const activeToken = participantToken(combat?.state?.turn_done_by?.includes(combatView?.currentId) ? null : combatView?.current, scene, tokens, manager && !preview);
   function focusToken(token) {
     if (!tokens.includes(token) || (!(manager && !preview) && !tokenIsVisible(token, scene, tokens))) return;
+    setCombatOpen(false);
     setSelectedId(token.id);
     const rect = stage.current?.getBoundingClientRect();
     if (!rect?.width || !rect.height || !scene) return;
@@ -317,7 +320,7 @@ export function TabletopView({
           </button>
         </div>
       )}
-      <div className={`vt-layout${combat ? "" : " vt-layout-no-combat"}`}>
+      <div className="vt-layout">
         <div className="vt-map-column">
           <div className="vt-map-panel">
             <div className="vt-toolbar">
@@ -330,6 +333,9 @@ export function TabletopView({
                   </small>
                 )}
               </div>
+              {combat && <button className="vt-combat-launch" type="button" aria-label="Abrir combate" aria-haspopup="dialog" aria-expanded={combatOpen} onClick={() => setCombatOpen(true)}>
+                Abrir combate <small>Rodada {combat.state?.rodada || round}</small>
+              </button>}
             </div>
             <TabletopViewport
               stageRef={stage}
@@ -1072,9 +1078,9 @@ export function TabletopView({
           )}
         </div>
         {combat && (
-          <aside className="vt-sidebar" aria-label="Combate da mesa">
+          <TabletopCombatDialog open={combatOpen} onClose={() => setCombatOpen(false)}>
             <TabletopCombatPanel key={missionId} combat={combat} manager={manager} preview={preview} userId={userId} character={character} scene={scene} tokens={tokens} onFocusToken={focusToken} onExitPreview={() => togglePreview(false)} {...combatControls} />
-          </aside>
+          </TabletopCombatDialog>
         )}
       </div>
     </section>
