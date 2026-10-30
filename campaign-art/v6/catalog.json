@@ -1,0 +1,537 @@
+[
+  {
+    "id": "A01",
+    "name": "Drone Beija-Flor A.S.A.",
+    "kind": "token",
+    "aliases": ["drone beija flor asa"],
+    "reserved": false,
+    "file": "TOKENS/A01.png"
+  },
+  {
+    "id": "A02",
+    "name": "Agente de Contenção A.S.A.",
+    "kind": "token",
+    "aliases": ["agente de contencao asa"],
+    "reserved": false,
+    "file": "TOKENS/A02.png"
+  },
+  {
+    "id": "A03",
+    "name": "Especialista GhostNet",
+    "kind": "token",
+    "aliases": ["A03 Especialista GhostNet"],
+    "reserved": false,
+    "file": "TOKENS/A03.png"
+  },
+  {
+    "id": "A04",
+    "name": "Contaminado pelo Chiado",
+    "kind": "token",
+    "aliases": ["A04 Contaminado pelo Chiado"],
+    "reserved": false,
+    "file": "TOKENS/A04.png"
+  },
+  {
+    "id": "A05",
+    "name": "Portador do Chiado",
+    "kind": "token",
+    "aliases": ["A05 Portador do Chiado", "portador do chiado"],
+    "reserved": false,
+    "file": "TOKENS/A05.png"
+  },
+  {
+    "id": "A06",
+    "name": "Portador Operacional",
+    "kind": "token",
+    "aliases": ["A06 Portador Operacional"],
+    "reserved": false,
+    "file": "TOKENS/A06.png"
+  },
+  {
+    "id": "A07",
+    "name": "Eco do Chiado",
+    "kind": "token",
+    "aliases": ["A07 Eco do Chiado"],
+    "reserved": false,
+    "file": "TOKENS/A07.png"
+  },
+  {
+    "id": "A08",
+    "name": "Portador Ruína",
+    "kind": "token",
+    "aliases": ["A08 Portador Ruina"],
+    "reserved": false,
+    "file": "TOKENS/A08.png"
+  },
+  {
+    "id": "A09",
+    "name": "Colmeia do Chiado",
+    "kind": "token",
+    "aliases": ["A09 Colmeia do Chiado"],
+    "reserved": false,
+    "file": "TOKENS/A09.png"
+  },
+  {
+    "id": "A10",
+    "name": "Kátia Moura",
+    "kind": "token",
+    "aliases": ["katia moura"],
+    "reserved": false,
+    "file": "TOKENS/A10.png"
+  },
+  {
+    "id": "A11",
+    "name": "Maestro / primeiro confronto",
+    "kind": "token",
+    "aliases": [
+      "o mestre cibernetico da noite",
+      "o ritual cibernetico do maestro"
+    ],
+    "reserved": true,
+    "file": "TOKENS/A11.png"
+  },
+  {
+    "id": "A12",
+    "name": "Josh / regente revelado",
+    "kind": "token",
+    "aliases": ["mago oculto em cidade futurista"],
+    "reserved": true,
+    "file": "TOKENS/A12.png"
+  },
+  {
+    "id": "A13",
+    "name": "Diabo no corpo de Josh",
+    "kind": "token",
+    "aliases": ["o maestro das sombras ciberneticas"],
+    "reserved": true,
+    "file": "TOKENS/A13.png"
+  },
+  {
+    "id": "P01",
+    "name": "Investigadora da Ordem",
+    "kind": "token",
+    "aliases": ["Investigadora Ordem"],
+    "reserved": false,
+    "file": "TOKENS/P01.png"
+  },
+  {
+    "id": "P02",
+    "name": "Investigador da Ordem / Tanque",
+    "kind": "token",
+    "aliases": ["Investigador Tanque"],
+    "reserved": false,
+    "file": "TOKENS/P02.png"
+  },
+  {
+    "id": "P03",
+    "name": "Moradora de Santa Íris",
+    "kind": "token",
+    "aliases": ["Moradora Santa Iris"],
+    "reserved": false,
+    "file": "TOKENS/P03.png"
+  },
+  {
+    "id": "P04",
+    "name": "Funcionário de Sistemas A.S.A.",
+    "kind": "token",
+    "aliases": ["Funcionario ASA Sistemas"],
+    "reserved": false,
+    "file": "TOKENS/P04.png"
+  },
+  {
+    "id": "P05",
+    "name": "Funcionário Médico A.S.A.",
+    "kind": "token",
+    "aliases": ["Funcionario ASA Medico"],
+    "reserved": false,
+    "file": "TOKENS/P05.png"
+  },
+  {
+    "id": "P06",
+    "name": "Delegado",
+    "kind": "token",
+    "aliases": ["Delegado"],
+    "reserved": false,
+    "file": "TOKENS/P06.png"
+  },
+  {
+    "id": "SI01",
+    "name": "Cozinha Comunitária",
+    "kind": "map",
+    "scene": "C02",
+    "story": "Cadastro, cozinha, armário de apoio e saída de serviço para a oficina. Abrigo de Marlene; conservar as rotas abertas.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 14,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI01.png"
+  },
+  {
+    "id": "SI02",
+    "name": "Oficina NullByte",
+    "kind": "map",
+    "scene": "C03",
+    "story": "Bancada de rádio, disjuntor, carcaça de drone e acesso ao mezanino. H07 permanece um handout separado.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 14,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI02.png"
+  },
+  {
+    "id": "SI03",
+    "name": "Igreja do Buffer",
+    "kind": "map",
+    "scene": "C04",
+    "story": "Acolhimento, banco de Bia, rádio isolado e subida ao telhado. Não apresenta um arsenal ou revelação paranormal pública.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI03.png"
+  },
+  {
+    "id": "SI04",
+    "name": "Viela da Van Preta",
+    "kind": "map",
+    "scene": "C05",
+    "story": "Rampa, maca, van de remoção, janela da testemunha e escada ao viaduto. A etiqueta H03 é entregue em separado.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 3,
+    "spawn_y": 14,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI04.png"
+  },
+  {
+    "id": "SI05",
+    "name": "Antena Morta",
+    "kind": "map",
+    "scene": "C06",
+    "story": "Mastro, ancoragem, módulo de dados, armário de V03–V04 e escada de retirada.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 20,
+    "spawn_y": 14,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI05.png"
+  },
+  {
+    "id": "SI06",
+    "name": "Cerco A.S.A.",
+    "kind": "map",
+    "scene": "C08",
+    "story": "Checkpoint privado da corporação, van e passagem pública lateral. A A.S.A. não é a polícia.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 3,
+    "spawn_y": 10,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/SI06.png"
+  },
+  {
+    "id": "00",
+    "name": "Recepção da A.S.A.",
+    "kind": "map",
+    "scene": "C09",
+    "story": "Balcão, fonte sonora, catracas, espera clínica e acesso ao serviço. A fachada corporativa permanece discreta.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/00.png"
+  },
+  {
+    "id": "B1",
+    "name": "Docas e Serviço",
+    "kind": "map",
+    "scene": "C10–C11",
+    "story": "Contêineres, manivela acessível, bancada de isolamento e elevador de carga. A rota de resgate não depende de vencer um combate.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 2,
+    "spawn_y": 7,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/B1.png"
+  },
+  {
+    "id": "01",
+    "name": "Operacional e Escritórios",
+    "kind": "map",
+    "scene": "C12–C13",
+    "story": "Baias, reunião, arquivo e auditoria. Controles e provas são objetos comuns; o trabalho humano continua reconhecível.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/01.png"
+  },
+  {
+    "id": "02",
+    "name": "GhostNet / Salão de Redundância",
+    "kind": "map",
+    "scene": "C15–C18",
+    "story": "Bancos A e B distintos, consoles e relés acessíveis, corredor de regência e rota mecânica de retirada. Não há uma alma digital guardada num servidor.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 17,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/02.png"
+  },
+  {
+    "id": "GN_ARQ",
+    "name": "GhostNet / Sala de Descarte",
+    "kind": "map",
+    "scene": "C16–C18",
+    "story": "Mapa próprio para comparação de registros, descarte físico e pista VOZ. Não incorpora a senha nem o texto de H10 na imagem.",
+    "columns": 16,
+    "rows": 12,
+    "spawn_x": 8,
+    "spawn_y": 10,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 12
+      }
+    ],
+    "file": "MAPAS/GN_ARQ.png"
+  },
+  {
+    "id": "B2",
+    "name": "Laboratório BIO-MONITOR",
+    "kind": "map",
+    "scene": "C20–C22",
+    "story": "Poltronas vazias, monitoramento, consentimento e transferência. Vítimas e ameaças são colocadas como tokens; não ficam desenhadas no cenário.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 20,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/B2.png"
+  },
+  {
+    "id": "B2_APOIO",
+    "name": "Clínica Auxiliar",
+    "kind": "map",
+    "scene": "C11 / C20 / repouso",
+    "story": "Mapa próprio de cuidado, resgate e recuperação. Desconexão da rede e rota de serviço tornam o abrigo uma escolha concreta.",
+    "columns": 16,
+    "rows": 12,
+    "spawn_x": 8,
+    "spawn_y": 10,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 12
+      }
+    ],
+    "file": "MAPAS/B2_APOIO.png"
+  },
+  {
+    "id": "B3",
+    "name": "Contenção e Ritual",
+    "kind": "map",
+    "scene": "C23–C24",
+    "story": "Quatro alcovas, liberações manuais, receptores e hub físico. O ritual está embutido na infraestrutura, antes da revelação vermelha do clímax.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/B3.png"
+  },
+  {
+    "id": "06",
+    "name": "Sala do Conselho",
+    "kind": "map",
+    "scene": "C25",
+    "story": "Conselho, backup, acesso ao arquivo morto, antena e passagem ao auditório. A história de Josh é revelada por documentos, não por texto no chão.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/06.png"
+  },
+  {
+    "id": "06_ARQ",
+    "name": "Arquivo Morto da Diretoria",
+    "kind": "map",
+    "scene": "C25 / H16–H18",
+    "story": "Mapa próprio para arquivo de papel, registros históricos, cofre e leitura isolada. Confrontar depoimentos e documentos preserva a investigação.",
+    "columns": 16,
+    "rows": 12,
+    "spawn_x": 8,
+    "spawn_y": 10,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 12
+      }
+    ],
+    "file": "MAPAS/06_ARQ.png"
+  },
+  {
+    "id": "M",
+    "name": "Auditório M-2023",
+    "kind": "map",
+    "scene": "C26–C30",
+    "story": "Projetor, palco, cabine, três controles de desacoplamento e saída de retorno. Identidade e imagens de Josh são handouts/tokens liberados pelo mestre.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/M.png"
+  },
+  {
+    "id": "B4",
+    "name": "Antecâmara do Núcleo",
+    "kind": "map",
+    "scene": "C31",
+    "story": "Elevador de retorno, abrigo de pacientes, painel de quatro linhas e porta para a arena. Ponto de preparação, sem encontro obrigatório extra.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/B4.png"
+  },
+  {
+    "id": "AF",
+    "name": "Arena do CORO",
+    "kind": "map",
+    "scene": "C32–C34",
+    "story": "Quatro âncoras distintas: Antena, BIO-MONITOR, GhostNet e Contrato. Anel de circulação, coberturas baixas, controles acessíveis e retirada sul.",
+    "columns": 24,
+    "rows": 18,
+    "spawn_x": 12,
+    "spawn_y": 15,
+    "areas": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      }
+    ],
+    "file": "MAPAS/AF.png"
+  }
+]

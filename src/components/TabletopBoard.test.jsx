@@ -6,6 +6,7 @@ import {
   campaignFolderImages,
   fogRectangle,
   snapPosition,
+  characterSpawn,
 } from "../domain/tabletop";
 afterEach(cleanup);
 const scene = {
@@ -51,6 +52,129 @@ function mapBounds(board, scale = 1) {
   board.releasePointerCapture = vi.fn();
 }
 describe("shared map interaction", () => {
+  it("reveals only occupied rooms and covers them when the last character leaves, including GM preview", () => {
+    const explored = {
+      ...scene,
+      vision_mode: "rooms",
+      vision_areas: [
+        { x: 0, y: 0, w: 8, h: 8 },
+        { x: 10, y: 0, w: 8, h: 8 },
+      ],
+    };
+    const people = [
+      { ...token, kind: "player" },
+      { ...token, id: "friend", kind: "player", owner_id: "b", x: 3 },
+    ];
+    const enemies = [
+      {
+        ...token,
+        id: "e1",
+        kind: "enemy",
+        name: "Ameaça oeste",
+        x: 4,
+        y: 4,
+        owner_id: null,
+      },
+      {
+        ...token,
+        id: "e2",
+        kind: "enemy",
+        name: "Ameaça leste",
+        x: 12,
+        y: 4,
+        owner_id: null,
+      },
+    ];
+    const { rerender, container } = render(
+      <TabletopBoard
+        scene={explored}
+        tokens={[...people, ...enemies]}
+        manager
+        preview
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Ameaça oeste/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Ameaça leste/ })).toBeNull();
+    expect(container.querySelectorAll(".vt-room-cover")).toHaveLength(1);
+    people[0] = { ...people[0], x: 11 };
+    rerender(
+      <TabletopBoard
+        scene={explored}
+        tokens={[...people, ...enemies]}
+        manager
+        preview
+      />,
+    );
+    expect(container.querySelectorAll(".vt-room-cover")).toHaveLength(0);
+    people[1] = { ...people[1], y: 10 };
+    rerender(
+      <TabletopBoard
+        scene={explored}
+        tokens={[...people, ...enemies]}
+        manager
+        preview
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Ameaça oeste/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Ameaça leste/ })).toBeTruthy();
+    rerender(
+      <TabletopBoard
+        scene={explored}
+        tokens={[...people, ...enemies]}
+        manager
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Ameaça oeste/ })).toBeTruthy();
+  });
+  it("marks a room and an entry only in the GM view and keeps spawn clear of larger tokens", () => {
+    const room = vi.fn(),
+      entry = vi.fn();
+    const { rerender } = render(
+      <TabletopBoard
+        scene={scene}
+        tokens={[]}
+        manager
+        tool="room"
+        onRoom={room}
+      />,
+    );
+    const board = screen.getByRole("application");
+    mapBounds(board);
+    pointer(board, "pointerdown", 225, 175);
+    pointer(board, "pointermove", 325, 275);
+    pointer(board, "pointerup", 325, 275);
+    expect(room).toHaveBeenCalledWith({ x: 2, y: 2, w: 3, h: 3 });
+    rerender(
+      <TabletopBoard
+        scene={scene}
+        tokens={[]}
+        manager
+        tool="spawn"
+        onSpawn={entry}
+      />,
+    );
+    pointer(board, "pointerdown", 325, 275);
+    expect(entry).toHaveBeenCalledWith({ x: 4, y: 4 });
+    rerender(
+      <TabletopBoard
+        scene={scene}
+        tokens={[]}
+        manager
+        preview
+        tool="spawn"
+        onSpawn={entry}
+      />,
+    );
+    pointer(board, "pointerdown", 425, 375);
+    expect(entry).toHaveBeenCalledTimes(1);
+    const spawn = characterSpawn({ ...scene, spawn_x: 2, spawn_y: 2 }, [
+      { ...token, size: 2 },
+    ]);
+    expect(spawn).not.toEqual({ x: 2, y: 2 });
+    expect(spawn.x < 2 || spawn.y < 2 || spawn.x >= 4 || spawn.y >= 4).toBe(
+      true,
+    );
+  });
   it.each([1, 2])(
     "drags on the grid at scale %s without native image dragging",
     (scale) => {

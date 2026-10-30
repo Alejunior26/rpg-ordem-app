@@ -138,14 +138,25 @@
 }
 .vt-stage {
   position: relative;
-  overflow: auto;
-  max-height: 75vh;
-  min-height: 320px;
+  overflow: hidden;
+  overflow: clip;
+  height: clamp(320px, 65vh, 850px);
+  touch-action: none;
+  overscroll-behavior: contain;
   background: radial-gradient(ellipse at center, #22223d, #0a0c16);
 }
 .vt-map-size {
-  min-width: 75%;
-  margin: auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+.vt-stage:has(.vt-tool-move) {
+  cursor: grab;
+}
+.vt-stage.vt-panning,
+.vt-stage.vt-panning * {
+  cursor: grabbing !important;
 }
 .vt-board {
   width: 100%;
@@ -158,6 +169,8 @@
   -webkit-user-drag: none;
 }
 .vt-tool-fog,
+.vt-tool-spawn,
+.vt-tool-room,
 .vt-tool-ruler {
   cursor: crosshair;
 }
@@ -167,6 +180,26 @@
 .vt-token:focus-visible circle {
   stroke: #fff;
   stroke-width: 6;
+}
+.vt-token-label {
+  opacity: 0;
+}
+.vt-token:hover .vt-token-label,
+.vt-token:focus-visible .vt-token-label,
+.vt-token.selected .vt-token-label {
+  opacity: 1;
+}
+.vt-room-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 11px;
+}
+.vt-room-row button {
+  padding: 5px 7px;
+  font-size: 10px;
 }
 .vt-map-footer {
   display: flex;
@@ -385,6 +418,13 @@
   height: 80px;
   object-fit: contain;
 }
+.vt-thumb-placeholder {
+  display: grid;
+  place-items: center;
+  height: 80px;
+  color: #ad91d0;
+  font-size: 24px;
+}
 .vt-library figcaption {
   font-size: 9px;
   line-height: 1.4;
@@ -487,8 +527,7 @@
     grid-column: auto;
   }
   .vt-stage {
-    min-height: 180px;
-    max-height: 60vh;
+    height: clamp(260px, 60vh, 650px);
   }
   .vt-toolbar {
     padding: 12px;
