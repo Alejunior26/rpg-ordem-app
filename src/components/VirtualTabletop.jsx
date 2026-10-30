@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useTabletop } from "../hooks/useTabletop";
 import {
@@ -8,6 +8,8 @@ import {
   snapPosition,
   tokenIsVisible,
 } from "../domain/tabletop";
+import TabletopCombatPanel from "./TabletopCombatPanel";
+import { participantToken, tabletopCombatView } from "../domain/tabletopCombat";
 import TabletopBoard from "./TabletopBoard";
 import TabletopViewport from "./TabletopViewport";
 import TabletopAssetThumbnail from "./TabletopAssetThumbnail";
@@ -56,6 +58,8 @@ export function TabletopView({
   character,
   round = 1,
   currentTurn = "",
+  combat,
+  ...combatControls
 }) {
   const [selectedScene, setSelectedScene] = useState(""),
     [selectedId, setSelectedId] = useState(null);
@@ -100,7 +104,18 @@ export function TabletopView({
         active ||
         table.scenes[0]
       : active;
-  const tokens = table.tokens.filter((t) => t.scene_id === scene?.id);
+  const tokens = useMemo(() => table.tokens.filter((t) => t.scene_id === scene?.id), [table.tokens, scene?.id]);
+  const combatView = combat ? tabletopCombatView(combat.state, combat.logs, manager && !preview) : null;
+  const activeToken = participantToken(combat?.state?.turn_done_by?.includes(combatView?.currentId) ? null : combatView?.current, scene, tokens, manager && !preview);
+  function focusToken(token) {
+    if (!tokens.includes(token) || (!(manager && !preview) && !tokenIsVisible(token, scene, tokens))) return;
+    setSelectedId(token.id);
+    const rect = stage.current?.getBoundingClientRect();
+    if (!rect?.width || !rect.height || !scene) return;
+    const width = Math.min(rect.width, rect.height * scene.columns / scene.rows) * zoom / 100;
+    setPan({ x: (0.5 - (token.x + token.size / 2) / scene.columns) * width,
+      y: (0.5 - (token.y + token.size / 2) / scene.rows) * width * scene.rows / scene.columns });
+  }
   const selected = tokens.find(
     (t) =>
       t.id === selectedId &&
@@ -401,6 +416,7 @@ export function TabletopView({
               manager={manager}
               preview={preview}
               busy={disabled}
+              activeTokenId={activeToken?.id}
               selectedId={selectedId}
               tool={tool}
               onSelect={setSelectedId}
@@ -442,11 +458,12 @@ export function TabletopView({
             <span>
               {table.busy
                 ? "Salvando…"
-                : `Rodada ${round}${currentTurn ? " · " + currentTurn : ""}`}
+                : `Rodada ${combat?.state?.rodada || round}${combatView ? (combatView.current ? " · " + combatView.current.nome : "") : currentTurn ? " · " + currentTurn : ""}`}
             </span>
           </div>
         </div>
         <aside className="vt-sidebar">
+          {combat && <TabletopCombatPanel key={missionId} combat={combat} manager={manager} preview={preview} userId={userId} character={character} scene={scene} tokens={tokens} onFocusToken={focusToken} {...combatControls} />}
           {manager && (
             <div className="vt-card">
               <h3>Direção da cena</h3>
