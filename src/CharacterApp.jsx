@@ -1557,7 +1557,6 @@ export default function AppContent() {
     const selectedChar = playerCharacters.find((c) => c.id === selectedCharacterId);
     return (
       <div className="with-sync" style={styles.body}>
-        {syncIndicator}
         <button
           onClick={signOut}
           style={{
@@ -1591,6 +1590,7 @@ export default function AppContent() {
           }}
         >
           <div style={{ ...styles.container, maxWidth: "760px", width: "100%" }}>
+            {syncIndicator}
             <div style={styles.statusBox}>
             <h2 style={styles.sectionTitle}>PRÉ-MISSÃO</h2>
             <div style={{ marginBottom: "16px" }}>
@@ -1784,7 +1784,6 @@ export default function AppContent() {
   if (!setupComplete && !(isDM && activeTab === 'mesa')) {
     return (
       <div className="with-sync" style={styles.body}>
-        {syncIndicator}
         <button
           onClick={signOut}
           style={{
@@ -1814,6 +1813,7 @@ export default function AppContent() {
             padding: isMobile ? "72px 12px 20px" : "40px 20px",
           }}
         >
+          {syncIndicator}
           <div style={{ ...styles.summaryCard, marginBottom: "14px" }}>
             <h2
               style={{
@@ -5159,7 +5159,6 @@ export default function AppContent() {
 
   return (
     <div className="with-sync" style={styles.body}>
-        {syncIndicator}
       <button
         onClick={signOut}
         style={{
@@ -5699,6 +5698,7 @@ export default function AppContent() {
           padding: activeTab === 'mesa' ? (isMobile ? '62px 12px 12px' : '70px 20px 20px') : (isMobile ? "12px" : "20px"),
         }}
       >
+        {syncIndicator}
         {/* ABA 1: STATUS (BIO-MONITOR) */}
         {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel}/></React.Suspense>}
         {activeTab === "status" && renderCharacterPanel("status")}

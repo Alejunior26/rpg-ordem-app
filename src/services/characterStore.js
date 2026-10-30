@@ -40,6 +40,7 @@ export function createCharacterSaveQueue({ save, storage, ownerId, onStatus = ()
     async flush() {
       if (running) return running;
       if (blocked) return false;
+      if (!pending.size) return true;
       running = (async () => {
         while (pending.size) {
           const [id, job] = pending.entries().next().value;

@@ -6,6 +6,23 @@ const storage = () => {
   return { getItem: (k) => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: (k) => values.delete(k), values };
 };
 describe('character persistence', () => {
+  it('does not announce a save when flushing an unchanged sheet or an empty queue', async () => {
+    const save = vi.fn().mockResolvedValue({ revision: 1 });
+    const onStatus = vi.fn();
+    const queue = createCharacterSaveQueue({ save, storage: storage(), ownerId: 'owner', onStatus });
+    queue.seed('a', 0, { pv: 20 });
+    queue.enqueue('a', { pv: 20 });
+    expect(await queue.flush()).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+    expect(onStatus).not.toHaveBeenCalled();
+    queue.enqueue('a', { pv: 19 });
+    await queue.flush();
+    expect(onStatus).toHaveBeenLastCalledWith({ state: 'saved', message: 'Ficha salva.' });
+    onStatus.mockClear();
+    expect(await queue.flush()).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(onStatus).not.toHaveBeenCalled();
+  });
   it('serializes saves and uses the new revision for edits made during an in-flight save', async () => {
     let release;
     const save = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release=resolve; })).mockResolvedValueOnce({ revision: 2 });
