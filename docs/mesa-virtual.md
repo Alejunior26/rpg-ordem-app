@@ -16,11 +16,11 @@ Jogadores podem colocar o próprio personagem numa área já revelada. Arraste u
 
 A roda do mouse aplica zoom de 50% a 400%, mantendo o ponto sob o cursor. Arrastar o fundo com **Mover** desloca o mapa; o botão do meio funciona também com outras ferramentas. **Centralizar** recupera o enquadramento completo. Arrastar um token e desenhar áreas continuam sendo gestos separados. A câmera do mestre é restaurada ao sair da prévia dos jogadores.
 
-**Marcar sala** cria uma área retangular e ativa a visão por salas. O centro de um token do tipo **Personagem**, visível, com jogador definido e fora de cobertura manual abre a sala para o grupo. O último personagem a sair cobre a sala novamente. NPCs e ameaças não abrem salas. Áreas não marcadas podem ser usadas como corredores visíveis; as marcações não podem se sobrepor.
+**Marcar sala** cria uma área retangular e ativa a visão por salas. O centro de um token do tipo **Personagem**, visível e fora de cobertura manual, abre a sala para o grupo. Peças de personagem controladas apenas pelo mestre também contam. O último personagem a sair cobre a sala novamente. NPCs e ameaças não abrem salas. Áreas não marcadas podem ser usadas como corredores visíveis; as marcações não podem se sobrepor.
 
 O pacote prioriza cenários próprios para os ambientes importantes, incluindo o arquivo GhostNet, a clínica auxiliar e o arquivo da diretoria. Cada cenário começa como uma sala dedicada; remova essa marcação para subdividir o mapa. A cobertura é visual por áreas, sem cálculo de raios ou colisão com paredes. A imagem do mapa autorizado é recebida como arquivo completo; segredos relevantes devem usar cenários separados. Tokens fora da visão são filtrados também pelo banco.
 
-**Marcar entrada** define onde chegam novos personagens. O pacote traz entradas posicionadas nos acessos. Para transformar uma peça existente em observador, escolha **Tipo do token → Personagem** e defina **Controlado por**. A escolha da ilustração sozinha não muda o tipo da peça.
+**Marcar entrada** define onde chegam novos personagens. O pacote traz entradas posicionadas nos acessos. Para transformar uma peça existente em observador, escolha **Tipo do token → Personagem**. Definir **Controlado por** permite ao participante mover a peça. A escolha da ilustração sozinha não muda o tipo da peça.
 
 ## Persistência e acesso
 

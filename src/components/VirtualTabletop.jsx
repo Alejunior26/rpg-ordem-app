@@ -510,8 +510,8 @@ export function TabletopView({
                       <p className="vt-muted">
                         Marque os limites de cada sala com “Marcar sala”.
                         Corredores sem marcação permanecem visíveis. Um token de
-                        personagem com jogador definido abre a sala; o último a
-                        sair a cobre novamente.
+                        Personagem, inclusive controlado pelo mestre, abre a
+                        sala; o último a sair a cobre novamente.
                       </p>
                       {(scene.vision_areas || []).map((area, index) => (
                         <div className="vt-room-row" key={index}>

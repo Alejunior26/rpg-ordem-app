@@ -21,7 +21,6 @@ export function occupiedRooms(scene, tokens = []) {
       (pc) =>
         pc.scene_id === scene.id &&
         pc.kind === "player" &&
-        pc.owner_id &&
         pc.visible &&
         !pc.deleted &&
         !tokenInFog(pc, scene.fog) &&

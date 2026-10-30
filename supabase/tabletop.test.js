@@ -67,6 +67,15 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      new URL(
+        "./migrations/20261030033437_tabletop_party_observers.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await as(
     admin,
     `insert into asa_tabletop_scenes(id,mission_id,name,map_path) values($1,$2,'Cozinha',$3),($4,$2,'Laboratório',$5),($6,$7,'Outra campanha',null)`,
@@ -417,6 +426,19 @@ describe("private tabletop and movement authorization", () => {
       ]),
     ).toEqual([]);
     await as(a, "update asa_tabletop_tokens set x=0,y=1 where id=$1", [one]);
+    expect(await visible()).toEqual([]);
+    await as(
+      admin,
+      `insert into asa_tabletop_tokens(id,scene_id,mission_id,kind,name,visible,x,y)
+      values($1,$2,$3,'player','Grupo controlado pelo mestre',true,2,2)`,
+      [id(75), sid, m1],
+    );
+    expect(await visible()).toEqual([e1]);
+    await as(
+      admin,
+      "update asa_tabletop_tokens set visible=false where id=$1",
+      [id(75)],
+    );
     expect(await visible()).toEqual([]);
     expect(
       (
