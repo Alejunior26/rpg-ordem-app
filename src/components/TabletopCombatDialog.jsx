@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 function focusableElements(dialog) {
@@ -15,7 +15,15 @@ function focusableElements(dialog) {
 
 export default function TabletopCombatDialog({ open, onClose, children }) {
   const dialog = useRef(null), closeButton = useRef(null);
+  const content = useRef(null), savedScroll = useRef(0);
   const titleId = useId();
+  const close = () => {
+    if (content.current) savedScroll.current = content.current.scrollTop;
+    onClose();
+  };
+  useLayoutEffect(() => {
+    if (open && content.current) content.current.scrollTop = savedScroll.current;
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
@@ -42,7 +50,7 @@ export default function TabletopCombatDialog({ open, onClose, children }) {
           if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
-            onClose();
+            close();
           } else if (event.key === 'Tab') {
             const elements = focusableElements(dialog.current);
             const first = elements[0], last = elements.at(-1);
@@ -54,9 +62,9 @@ export default function TabletopCombatDialog({ open, onClose, children }) {
       >
         <header className="vt-combat-window-header">
           <div><h2 id={titleId}>Combate</h2><p>Rodadas, iniciativa e ações da missão.</p></div>
-          <button ref={closeButton} type="button" onClick={onClose} aria-label="Fechar combate">Voltar ao mapa <kbd>Esc</kbd></button>
+          <button ref={closeButton} type="button" onClick={close} aria-label="Fechar combate">Voltar ao mapa <kbd>Esc</kbd></button>
         </header>
-        <div className="vt-combat-window-body">{children}</div>
+        <div ref={content} className="vt-combat-window-body" onScroll={(event) => { if (open) savedScroll.current = event.currentTarget.scrollTop; }}>{children}</div>
       </section>
     </div>, document.body,
   );

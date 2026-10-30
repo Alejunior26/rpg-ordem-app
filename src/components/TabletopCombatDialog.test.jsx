@@ -32,6 +32,8 @@ it('closes with Escape or its button, restores focus and preserves drafts and sc
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(document.activeElement).toBe(opener);
   expect(document.body.style.overflow).toBe('auto');
+  // Reopening restores the saved position even if a hidden element lost layout.
+  body.scrollTop = 0;
   fireEvent.click(opener);
   expect(screen.getByLabelText('Ação em preparação').value).toBe('Atacar com a pistola');
   expect(body.scrollTop).toBe(145);
