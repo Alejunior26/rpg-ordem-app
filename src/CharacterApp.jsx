@@ -2341,20 +2341,33 @@ export default function AppContent() {
                 </div>
                 <div style={{ display: "grid", gap: "6px" }}>
                   {(monster?.actions || []).map((action, index) => (
-                    <button
+                    <div
                       key={`${participant.userId}-${action.name}-${index}`}
-                      onClick={() =>
-                        sendMonsterActionToLog(participant, action)
-                      }
+                      className="combat-monster-action"
                       style={{
-                        ...styles.btnStep,
-                        textAlign: "left",
-                        borderColor: colors.brand,
-                        color: "#d1d5db",
+                        border: `1px solid ${colors.brand}44`,
+                        borderRadius: "8px",
+                        padding: "12px",
+                        background: "rgba(0,0,0,0.2)",
                       }}
                     >
-                      {action.type} - {action.name}
-                    </button>
+                      <strong style={{ color: colors.brand, fontSize: "13px" }}>
+                        {action.type} - {action.name}
+                      </strong>
+                      <p style={{ color: "#d1d5db", fontSize: "13px", lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: "8px 0 12px" }}>
+                        {typeof action.text === "string" && action.text.trim()
+                          ? action.text
+                          : "Descrição não cadastrada para esta ação."}
+                      </p>
+                      <button
+                        type="button"
+                        aria-label={`Usar ${action.name} de ${participant.nome}`}
+                        onClick={() => sendMonsterActionToLog(participant, action)}
+                        style={{ ...styles.btnStep, borderColor: colors.brand, color: "#d1d5db" }}
+                      >
+                        Usar ação
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
