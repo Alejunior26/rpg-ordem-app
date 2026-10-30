@@ -529,6 +529,8 @@ export default function AppContent() {
   const [adminProfiles, setAdminProfiles] = useState([]);
   const [adminCharacters, setAdminCharacters] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
+  const actionIdentity = useRef(null);
+  actionIdentity.current = `${selectedMission}:${selectedCharacterId}`;
   const missionCombat = useMissionCombat(isUuid(selectedMission) ? selectedMission : null);
   const rodadaAtual = missionCombat.state?.rodada || 1;
   const combatParticipants = missionCombat.state?.participants || EMPTY_COMBAT_LIST;
@@ -2123,551 +2125,35 @@ export default function AppContent() {
     );
   }
 
-  return (
-    <div className="with-sync" style={styles.body}>
-        {syncIndicator}
-      <button
-        onClick={signOut}
-        style={{
-          position: "fixed",
-          top: isMobile ? "10px" : "20px",
-          right: isMobile ? "10px" : "20px",
-          zIndex: 9999,
-          background: "#ff1744",
-          color: "#fff",
-          border: "none",
-          padding: isMobile ? "8px 12px" : "10px 14px",
-          borderRadius: "8px",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontWeight: "bold",
-          fontSize: isMobile ? "12px" : "14px",
-          boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
-        }}
-      >
-        Sair
-      </button>
-      <button
-        onClick={() => setPreMissionReady(false)}
-        style={{
-          position: "fixed",
-          top: isMobile ? "10px" : "20px",
-          right: isMobile ? "164px" : "208px",
-          zIndex: 9999,
-          background: "#10131a",
-          color: "#d1d5db",
-          border: "1px solid #3a3f4b",
-          padding: isMobile ? "8px 10px" : "10px 12px",
-          borderRadius: "8px",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontWeight: "bold",
-          fontSize: isMobile ? "11px" : "13px",
-        }}
-      >
-        Missão/Personagem
-      </button>
-      <button
-        onClick={restartCharacterSetup}
-        style={{
-          position: "fixed",
-          top: isMobile ? "10px" : "20px",
-          right: isMobile ? "90px" : "96px",
-          zIndex: 9999,
-          background: "#1a1b22",
-          color: colors.brand,
-          border: `1px solid ${colors.brand}66`,
-          padding: isMobile ? "8px 10px" : "10px 12px",
-          borderRadius: "8px",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontWeight: "bold",
-          fontSize: isMobile ? "12px" : "14px",
-        }}
-      >
-        Recomeçar
-      </button>
-      {/* 👇 ANIMAÇÃO DE RITUAIS 👇 */}
-      <style>
-        {`
-          @keyframes ritualCast {
-            0% { opacity: 0; filter: contrast(1); }
-            15% { opacity: 1; filter: contrast(1.3); }
-            100% { opacity: 0; filter: contrast(1); }
-          }
-        `}
-      </style>
+  async function joinCombat() {
+    if (alreadyJoinedCombat) return;
+    const activeName = getActiveCharacterName();
+    if (!(await emitCombatFlow("JOIN", { userId: user.id, nome: activeName }))) return;
+    await appendCombatLog([{ personagem: activeName, acao: "Entrou no combate.", rodada: rodadaAtual }]);
+  }
 
-      {efeitoRitual && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            pointerEvents: "none", // 👈 MUITO IMPORTANTE: permite clicar "através" do efeito
-            zIndex: 10000,
-            background:
-              efeitoRitual === "Sangue"
-                ? "radial-gradient(circle, transparent 30%, rgba(255, 23, 68, 0.45) 100%)"
-                : efeitoRitual === "Morte"
-                ? "radial-gradient(circle, transparent 30%, rgba(10, 10, 15, 0.9) 100%)"
-                : efeitoRitual === "Conhecimento"
-                ? "radial-gradient(circle, transparent 30%, rgba(255, 209, 102, 0.45) 100%)"
-                : efeitoRitual === "Energia"
-                ? "radial-gradient(circle, transparent 30%, rgba(0, 229, 255, 0.45) 100%)"
-                : "radial-gradient(circle, transparent 30%, rgba(255, 255, 255, 0.6) 100%)", // Medo
-            boxShadow: `inset 0 0 150px ${
-              efeitoRitual === "Sangue"
-                ? "#ff1744"
-                : efeitoRitual === "Morte"
-                ? "#000000"
-                : efeitoRitual === "Conhecimento"
-                ? "#ffd166"
-                : efeitoRitual === "Energia"
-                ? "#00e5ff"
-                : "#ffffff"
-            }`,
-            animation: "ritualCast 1.5s ease-out forwards",
-          }}
-        />
-      )}
-      {/* 👆 FIM DA ANIMAÇÃO 👆 */}
-      {nexPopup && (
-        <div style={styles.popupOverlay}>
-          <div role="dialog" aria-modal="true" aria-label="Progressão de NEX" data-asa-dialog="nex" tabIndex={-1} style={styles.popupBox}>
-            <h3
-              style={{
-                marginTop: 0,
-                color: colors.brand,
-                letterSpacing: "2px",
-              }}
-            >
-              NEX {nexPopup.to}% DESBLOQUEADO
-            </h3>
-            <p
-              style={{
-                color: "#8fb7c4",
-                fontSize: "12px",
-                marginBottom: "18px",
-              }}
-            >
-              Novos acessos liberados na progressão.
-            </p>
-            {nexPopup.unlocks.map((item, i) => (
-              <div key={`${item.nome}-${i}`} style={styles.popupItem}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "10px",
-                    marginBottom: "6px",
-                  }}
-                >
-                  <strong style={{ color: "#fff" }}>{item.nome}</strong>
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      color: colors.pe,
-                      background: "rgba(197, 160, 0, 0.1)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    NEX {item.nex}%
-                  </span>
-                </div>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#aaa",
-                    fontSize: "12px",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {item.desc}
-                </p>
-              </div>
-            ))}
-            <button
-              onClick={() => setNexPopup(null)}
-              style={{
-                ...styles.btnStep,
-                marginTop: "10px",
-                padding: "10px 14px",
-                borderColor: colors.brand,
-                color: colors.brand,
-                width: "100%",
-              }}
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
+  async function finishOwnTurn() {
+    if (turnDoneBy.includes(user.id) || turnOrder[turnIndex] !== user.id) return;
+    if (!(await emitCombatFlow("TURN_DONE", { userId: user.id, round: rodadaAtual }))) return;
+    await appendCombatLog([{ personagem: getActiveCharacterName(), acao: "Finalizou o turno.", rodada: rodadaAtual }]);
+  }
 
-      {/* 👇 MODAL DA BIBLIOTECA DE RITUAIS (EM TELA CHEIA) 👇 */}
-      {isRitualModalOpen && (
-        <div
-          style={{
-            ...styles.popupOverlay,
-            width: "100vw",
-            height: "100vh",
-            top: 0,
-            left: 0,
-          }}
-          onClick={() => setIsRitualModalOpen(false)}
-        >
-          <div role="dialog" aria-modal="true" aria-label="Biblioteca arcana" data-asa-dialog="ritual" tabIndex={-1}
-            style={{
-              ...styles.popupBox,
-              width: "100%",
-              maxWidth: "850px",
-              maxHeight: "85vh",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* CABEÇALHO DO MODAL */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-                borderBottom: `1px solid ${colors.brand}44`,
-                paddingBottom: "15px",
-              }}
-            >
-              <h2
-                style={{
-                  color: colors.brand,
-                  margin: 0,
-                  letterSpacing: "2px",
-                  fontSize: "18px",
-                }}
-              >
-                BIBLIOTECA ARCANA
-              </h2>
-              <button
-                onClick={() => setIsRitualModalOpen(false)}
-                style={{
-                  ...styles.btnStep,
-                  borderColor: colors.pv,
-                  color: colors.pv,
-                }}
-              >
-                FECHAR ✖
-              </button>
-            </div>
+  async function finishCurrentTurn() {
+    if (!isDM) return;
+    const currentId = turnOrder[turnIndex];
+    if (!currentId || turnDoneBy.includes(currentId)) return;
+    if (!(await emitCombatFlow("TURN_DONE", { userId: currentId, round: rodadaAtual }))) return;
+    const currentName = combatParticipants.find((p) => p.userId === currentId)?.nome || "Inimigo";
+    await appendCombatLog([{
+      personagem: "SISTEMA A.S.A.",
+      acao: `Mestre encerrou o turno de ${currentName}.`,
+      rodada: rodadaAtual,
+    }]);
+  }
 
-            {/* FILTROS */}
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-              <select
-                value={filtroElemento}
-                onChange={(e) => setFiltroElemento(e.target.value)}
-                style={styles.selectField}
-              >
-                <option value="Todos">Todos os Elementos</option>
-                <option value="Conhecimento">Conhecimento</option>
-                <option value="Energia">Energia</option>
-                <option value="Medo">Medo</option>
-                <option value="Morte">Morte</option>
-                <option value="Sangue">Sangue</option>
-              </select>
-
-              <select
-                value={filtroCirculo}
-                onChange={(e) => setFiltroCirculo(e.target.value)}
-                style={styles.selectField}
-              >
-                <option value="Todos">Todos os Círculos</option>
-                <option value="1">1º Círculo</option>
-                <option value="2">2º Círculo</option>
-                <option value="3">3º Círculo</option>
-                <option value="4">4º Círculo</option>
-              </select>
-            </div>
-
-            {/* GRID DE RITUAIS FILTRADOS */}
-            <div
-              style={{
-                ...styles.tabGrid,
-                overflowY: "auto",
-                paddingRight: "10px",
-                flex: 1,
-              }}
-            >
-              {rituaisCatalog
-                .filter((r) => !rituaisSelecionados.includes(r.nome))
-                .filter(
-                  (r) =>
-                    filtroElemento === "Todos" || r.elemento === filtroElemento
-                )
-                .filter(
-                  (r) =>
-                    filtroCirculo === "Todos" ||
-                    r.circulo.toString() === filtroCirculo
-                )
-                .sort(
-                  (a, b) =>
-                    a.circulo - b.circulo ||
-                    a.elemento.localeCompare(b.elemento)
-                )
-                .map((r) => {
-                  let corRitual = colors.pe;
-                  if (r.elemento === "Morte") corRitual = "#9e9e9e";
-                  if (r.elemento === "Sangue") corRitual = "#ff1744";
-                  if (r.elemento === "Energia") corRitual = "#00e5ff";
-                  if (r.elemento === "Conhecimento") corRitual = "#ffd166";
-                  if (r.elemento === "Medo") corRitual = "#ffffff";
-
-                  return (
-                    <div
-                      key={r.nome}
-                      style={{
-                        ...styles.summaryCard,
-                        borderLeft: `3px solid ${corRitual}`,
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          <strong
-                            style={{
-                              color: "#fff",
-                              fontSize: "14px",
-                              letterSpacing: "1px",
-                            }}
-                          >
-                            {r.nome.toUpperCase()}
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              color: corRitual,
-                              background: `${corRitual}11`,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            {r.circulo}º CÍRCULO
-                          </span>
-                        </div>
-                        <p
-                          style={{
-                            fontSize: "11px",
-                            color: "#aaa",
-                            lineHeight: 1.6,
-                            margin: "0 0 15px 0",
-                            whiteSpace: "pre-line",
-                          }}
-                        >
-                          {r.desc}
-                          {r.discente && (
-                            <>
-                              <br />
-                              <br />
-                              <span style={{ color: "#00e5ff" }}>
-                                [ DISCENTE ]: {r.discente.desc}
-                              </span>
-                            </>
-                          )}
-                          {r.verdadeiro && (
-                            <>
-                              <br />
-                              <br />
-                              <span style={{ color: "#ffd166" }}>
-                                [ VERDADEIRO ]: {r.verdadeiro.desc}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() =>
-                          setRituaisSelecionados([
-                            ...rituaisSelecionados,
-                            r.nome,
-                          ])
-                        }
-                        style={{
-                          ...styles.btnStep,
-                          width: "100%",
-                          borderColor: corRitual,
-                          color: corRitual,
-                          fontWeight: "bold",
-                        }}
-                      >
-                        + APRENDER
-                      </button>
-                    </div>
-                  );
-                })}
-            </div>
-            {/* MENSAGEM SE NÃO ACHAR NADA */}
-            {rituaisCatalog.filter(
-              (r) =>
-                !rituaisSelecionados.includes(r.nome) &&
-                (filtroElemento === "Todos" || r.elemento === filtroElemento) &&
-                (filtroCirculo === "Todos" ||
-                  r.circulo.toString() === filtroCirculo)
-            ).length === 0 && (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "#666",
-                  padding: "40px 0",
-                }}
-              >
-                Nenhum ritual novo encontrado com esses filtros.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {/* 👆 FIM DO MODAL DE RITUAIS 👆 */}
-
-      <nav
-        style={{
-          ...styles.sidebar,
-          width: isMobile ? "58px" : "74px",
-          gap: isMobile ? "14px" : "24px",
-          padding: isMobile ? "12px 0" : "18px 0",
-        }}
-      >
-        <div
-          style={{
-            color: colors.brand,
-            fontWeight: "bold",
-            fontSize: "12px",
-            marginBottom: "20px",
-            letterSpacing: "2px",
-          }}
-        >
-          A.S.A
-        </div>
-        <button
-          onClick={() => setActiveTab("status")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "status" ? colors.brand : "#333",
-          }}
-          title="Bio-Monitor"
-        >
-          <TabGlyph tab="status" active={activeTab === "status"} />
-        </button>
-        <button
-          onClick={() => setActiveTab("classe")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "classe" ? colors.brand : "#333",
-          }}
-          title="Arquétipo"
-        >
-          <TabGlyph tab="classe" active={activeTab === "classe"} />
-        </button>
-        <button
-          onClick={() => setActiveTab("pericias")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "pericias" ? colors.brand : "#333",
-          }}
-          title="Perícias"
-        >
-          <TabGlyph tab="pericias" active={activeTab === "pericias"} />
-        </button>
-        <button
-          onClick={() => setActiveTab("rituais")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "rituais" ? colors.brand : "#333",
-          }}
-          title="Rituais"
-        >
-          <TabGlyph tab="rituais" active={activeTab === "rituais"} />
-        </button>
-        <button
-          onClick={() => setActiveTab("inventario")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "inventario" ? colors.brand : "#333",
-          }}
-          title="Inventário"
-        >
-          <TabGlyph tab="inventario" active={activeTab === "inventario"} />
-        </button>
-        {isDM && (
-          <button
-            onClick={() => setActiveTab("bestiario")}
-            style={{
-              ...styles.navBtn,
-              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-              color: activeTab === "bestiario" ? colors.brand : "#333",
-            }}
-            title="Bestiario"
-          >
-            <TabGlyph tab="bestiario" active={activeTab === "bestiario"} />
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab("combate")}
-          style={{
-            ...styles.navBtn,
-            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-            color: activeTab === "combate" ? colors.brand : "#333",
-          }}
-          title="Mesa de Combate"
-        >
-          <TabGlyph tab="combate" active={activeTab === "combate"} />
-        </button>
-        <button type="button" onClick={()=>setActiveTab('mesa')} title="Mesa virtual" aria-label="Mesa virtual" aria-current={activeTab==='mesa'?'page':undefined} style={{...styles.navBtn,color:activeTab==='mesa'?'#c6a2f5':'#777'}}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16M15 5v16"/><circle cx="12" cy="11" r="2"/></svg>
-        </button>
-        {isDM && (
-          <button
-            onClick={() => setActiveTab("admin")}
-            style={{
-              ...styles.navBtn,
-              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
-              color: activeTab === "admin" ? colors.brand : "#333",
-            }}
-            title="Admin"
-          >
-            <TabGlyph tab="classe" active={activeTab === "admin"} />
-          </button>
-        )}
-      </nav>
-
-      <main
-        style={{
-          ...styles.mainContent,
-          marginLeft: isMobile ? "58px" : "74px",
-          width: isMobile ? "calc(100% - 58px)" : "calc(100% - 74px)",
-          padding: activeTab === 'mesa' ? (isMobile ? '62px 12px 12px' : '70px 20px 20px') : (isMobile ? "12px" : "20px"),
-        }}
-      >
-        {/* ABA 1: STATUS (BIO-MONITOR) */}
-        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} round={rodadaAtual} currentTurn={combatParticipants.find(p=>p.userId===turnOrder[missionCombat.state?.turn_index||0])?.nome}/></React.Suspense>}
-        {activeTab === "status" && (
+  function renderCharacterPanel(actionTab) {
+    return <fieldset disabled={missionCombat.busy || missionCombat.logBusy} style={{border: 0, padding: 0, margin: 0, minWidth: 0}}>
+        {actionTab === "status" && (
           <div style={styles.container}>
             <div style={{ textAlign: "center", marginBottom: "10px" }}>
               <h2
@@ -3015,7 +2501,7 @@ export default function AppContent() {
         )}
 
         {/* ABA 2: ARQUÉTIPO (CLASSE E ORIGEM) */}
-        {activeTab === "classe" && (
+        {actionTab === "classe" && (
           <div style={styles.container}>
             <div style={styles.statusBox}>
               <h2 style={styles.sectionTitle}>PROFILER_ARQUÉTIPO</h2>
@@ -3360,14 +2846,14 @@ export default function AppContent() {
                             const pNome =
                               nomePersonagem || user.email.split("@")[0];
                             const textoAcao = `Usou a habilidade: ${h.nome.toUpperCase()}`;
-                            alert(textoAcao);
-                            await appendCombatLog([
+                            const result = await appendCombatLog([
                               {
                                 personagem: pNome,
                                 acao: textoAcao,
                                 rodada: rodadaAtual,
                               },
                             ]);
+                            if (!result.error) alert(textoAcao);
                           }}
                           style={{
                             background: "none",
@@ -3570,15 +3056,14 @@ export default function AppContent() {
                               if (!poderReal) return;
 
                               const textoAcao = `Usou o poder: ${poderReal.toUpperCase()}`;
-                              alert(textoAcao);
-
-                              await appendCombatLog([
+                              const result = await appendCombatLog([
                                 {
                                   personagem: pNome,
                                   acao: textoAcao,
                                   rodada: rodadaAtual,
                                 },
                               ]);
+                              if (!result.error) alert(textoAcao);
                             }}
                             style={{
                               ...styles.btnStep,
@@ -3602,8 +3087,7 @@ export default function AppContent() {
           </div>
         )}
 
-        {/* ABA 3: PERÍCIAS */}
-        {activeTab === "pericias" && (
+        {actionTab === "pericias" && (
           <div style={styles.container}>
             <div style={styles.statusBox}>
               <h2 style={styles.sectionTitle}>MÓDULO_DE_PERÍCIAS</h2>
@@ -3929,7 +3413,7 @@ export default function AppContent() {
         )}
 
         {/* ABA 4: RITUAIS */}
-        {activeTab === "rituais" && (
+        {actionTab === "rituais" && (
           <div style={styles.container}>
             <div style={styles.statusBox}>
               <h2 style={styles.sectionTitle}>MÓDULO_DE_RITUAIS</h2>
@@ -4235,7 +3719,7 @@ export default function AppContent() {
                         <button
                           onClick={async () => {
                             if (peAtual >= custoFinal) {
-                              setPeAtual((prev) => prev - custoFinal);
+                              const identity = actionIdentity.current;
                               const nomeAlvo =
                                 alvoSelecionado === "self"
                                   ? "a si mesmo"
@@ -4246,13 +3730,7 @@ export default function AppContent() {
                                 ritual.nome
                               } (${versaoSelecionada.toUpperCase()}) em ${nomeAlvo}. [-${custoFinal} PE]`;
 
-                              setEfeitoRitual(ritual.elemento);
-                              setTimeout(() => setEfeitoRitual(null), 1500); // Remove após 1.5 segundos
-
-                              alert(textoAcao);
-
-                              // 👇 Manda para a Linha do Tempo da mesa 👇
-                              await appendCombatLog([
+                              const result = await appendCombatLog([
                                 {
                                   personagem:
                                     nomePersonagem || user.email.split("@")[0],
@@ -4260,6 +3738,11 @@ export default function AppContent() {
                                   rodada: rodadaAtual,
                                 },
                               ]);
+                              if (result.error || actionIdentity.current !== identity) return;
+                              setPeAtual((prev) => prev - custoFinal);
+                              setEfeitoRitual(ritual.elemento);
+                              setTimeout(() => setEfeitoRitual(null), 1500);
+                              alert(textoAcao);
                             } else {
                               alert(
                                 `Você precisa de ${custoFinal} PE para conjurar a versão ${versaoSelecionada} de ${ritual.nome}.`
@@ -4287,267 +3770,7 @@ export default function AppContent() {
             </div>
           </div>
         )}
-        {activeTab === "bestiario" && isDM && (
-          <div style={styles.container}>
-            <div style={styles.statusBox}>
-              <h2 style={styles.sectionTitle}>BESTIARIO_A.S.A.</h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 0.9fr) 1.4fr",
-                  gap: "16px",
-                }}
-              >
-                <div style={{ display: "grid", gap: "10px", alignContent: "start" }}>
-                  <select
-                    value={selectedBestiary?.id || ""}
-                    onChange={(e) => setSelectedBestiaryId(e.target.value)}
-                    style={styles.selectField}
-                  >
-                    {bestiaryEntries.map((monster) => (
-                      <option key={monster.id} value={monster.id}>
-                        VD {monster.vd || "?"} - {monster.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => addMonsterToCombat(selectedBestiary)}
-                    style={{
-                      ...styles.btnStep,
-                      width: "100%",
-                      borderColor: colors.brand,
-                      color: colors.brand,
-                      padding: "10px",
-                    }}
-                  >
-                    Adicionar selecionado ao combate
-                  </button>
-                  {selectedBestiary?.custom && (
-                    <button
-                      onClick={() => removeCustomMonster(selectedBestiary.id)}
-                      style={{
-                        ...styles.btnStep,
-                        width: "100%",
-                        borderColor: colors.pv,
-                        color: colors.pv,
-                        padding: "10px",
-                      }}
-                    >
-                      Remover monstro customizado
-                    </button>
-                  )}
-
-                  <div
-                    style={{
-                      ...styles.summaryCard,
-                      borderColor: `${colors.brand}33`,
-                    }}
-                  >
-                    <div style={{ color: colors.brand, fontSize: "12px", marginBottom: "8px" }}>
-                      AMEACAS CADASTRADAS
-                    </div>
-                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
-                      {asaBestiary.length} do bestiario A.S.A. Tower 2077
-                      <br />
-                      {customBestiary.length} customizadas neste navegador
-                    </div>
-                  </div>
-                </div>
-
-                {selectedBestiary && (
-                  <div style={styles.summaryCard}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        flexWrap: "wrap",
-                        borderBottom: `1px solid ${colors.border}`,
-                        paddingBottom: "12px",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <div>
-                        <h3 style={{ color: "#fff", margin: "0 0 6px 0" }}>
-                          {selectedBestiary.name}
-                        </h3>
-                        <div style={{ color: "#9ca3af", fontSize: "12px" }}>
-                          {selectedBestiary.type}
-                        </div>
-                      </div>
-                      <div style={{ color: colors.pe, fontWeight: "bold" }}>
-                        VD {selectedBestiary.vd || "?"}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
-                        gap: "10px",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
-                        <strong style={{ color: colors.brand }}>Defesa:</strong>{" "}
-                        {selectedBestiary.defense || "-"}
-                      </div>
-                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
-                        <strong style={{ color: colors.brand }}>PV:</strong>{" "}
-                        {selectedBestiary.hp || "-"}
-                      </div>
-                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
-                        <strong style={{ color: colors.brand }}>Sentidos:</strong>{" "}
-                        {selectedBestiary.senses || "-"}
-                      </div>
-                    </div>
-
-                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
-                      <strong style={{ color: colors.brand }}>Resistencias:</strong>{" "}
-                      {selectedBestiary.resistances || "-"}
-                      <br />
-                      <strong style={{ color: colors.brand }}>Vulnerabilidades:</strong>{" "}
-                      {selectedBestiary.vulnerabilities || "-"}
-                    </div>
-
-                    {!!selectedBestiary.traits?.length && (
-                      <div style={{ marginTop: "14px" }}>
-                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
-                          TRAÇOS
-                        </div>
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          {selectedBestiary.traits.map((trait, index) => (
-                            <div key={index} style={{ color: "#d1d5db", fontSize: "12px" }}>
-                              {trait}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {!!selectedBestiary.actions?.length && (
-                      <div style={{ marginTop: "14px" }}>
-                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
-                          HABILIDADES
-                        </div>
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          {selectedBestiary.actions.map((action, index) => (
-                            <div
-                              key={`${action.name}-${index}`}
-                              style={{
-                                border: `1px solid ${colors.border}`,
-                                borderRadius: "8px",
-                                padding: "10px",
-                              }}
-                            >
-                              <div style={{ color: "#fff", fontWeight: "bold", fontSize: "12px" }}>
-                                {action.type} - {action.name}
-                              </div>
-                              <div style={{ color: "#aaa", fontSize: "12px", marginTop: "4px" }}>
-                                {action.text}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={styles.statusBox}>
-              <h2 style={styles.sectionTitle}>ADICIONAR_MONSTRO</h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
-                  gap: "10px",
-                }}
-              >
-                <input
-                  value={monsterDraft.name}
-                  onChange={(e) => updateMonsterDraft("name", e.target.value)}
-                  placeholder="Nome"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.vd}
-                  onChange={(e) => updateMonsterDraft("vd", e.target.value)}
-                  placeholder="VD"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.type}
-                  onChange={(e) => updateMonsterDraft("type", e.target.value)}
-                  placeholder="Tipo / papel"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.defense}
-                  onChange={(e) => updateMonsterDraft("defense", e.target.value)}
-                  placeholder="Defesa"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.hp}
-                  onChange={(e) => updateMonsterDraft("hp", e.target.value)}
-                  placeholder="PV"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.senses}
-                  onChange={(e) => updateMonsterDraft("senses", e.target.value)}
-                  placeholder="Sentidos / iniciativa"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.resistances}
-                  onChange={(e) => updateMonsterDraft("resistances", e.target.value)}
-                  placeholder="Resistencias"
-                  style={styles.selectField}
-                />
-                <input
-                  value={monsterDraft.vulnerabilities}
-                  onChange={(e) => updateMonsterDraft("vulnerabilities", e.target.value)}
-                  placeholder="Vulnerabilidades"
-                  style={styles.selectField}
-                />
-                <textarea
-                  value={monsterDraft.traitsText}
-                  onChange={(e) => updateMonsterDraft("traitsText", e.target.value)}
-                  placeholder="Traços, um por linha"
-                  rows={5}
-                  style={{ ...styles.selectField, resize: "vertical" }}
-                />
-                <textarea
-                  value={monsterDraft.actionsText}
-                  onChange={(e) => updateMonsterDraft("actionsText", e.target.value)}
-                  placeholder={"Habilidades, uma por linha\nEx: Garra: Teste 3d20+10 | Dano 2d8"}
-                  rows={5}
-                  style={{ ...styles.selectField, resize: "vertical" }}
-                />
-              </div>
-              <button
-                onClick={saveCustomMonster}
-                style={{
-                  ...styles.btnStep,
-                  marginTop: "12px",
-                  width: "100%",
-                  padding: "12px",
-                  borderColor: colors.brand,
-                  color: colors.brand,
-                }}
-              >
-                Salvar monstro no bestiario
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE) */}
-        {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE & TIMELINE) */}
-        {activeTab === "combate" && (
+        {actionTab === "combate" && (
           <div style={styles.container}>
             <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
               {/* PAINEL DE RODADA (ESQUERDA) */}
@@ -4595,21 +3818,7 @@ export default function AppContent() {
                     {missions.find((m) => m.id === selectedMission)?.name || "Sem missão selecionada"}
                   </div>
                   <button
-                    onClick={async () => {
-                      if (alreadyJoinedCombat) return;
-                      const activeName = getActiveCharacterName();
-                      if (!(await emitCombatFlow("JOIN", {
-                        userId: user.id,
-                        nome: activeName,
-                      }))) return;
-                      await appendCombatLog([
-                        {
-                          personagem: activeName,
-                          acao: "Entrou no combate.",
-                          rodada: rodadaAtual,
-                        },
-                      ]);
-                    }}
+                    onClick={joinCombat}
                     style={{
                       ...styles.btnStep,
                       width: "100%",
@@ -4642,22 +3851,8 @@ export default function AppContent() {
                     </div>
                     {turnOrder.includes(user.id) && (
                       <button
-                        onClick={async () => {
-                          if (turnDoneBy.includes(user.id)) return;
-                          if (turnOrder[turnIndex] !== user.id) return;
-                          if (!(await emitCombatFlow("TURN_DONE", {
-                            userId: user.id,
-                            round: rodadaAtual,
-                          }))) return;
-                          await appendCombatLog([
-                            {
-                              personagem: getActiveCharacterName(),
-                              acao: "Finalizou o turno.",
-                              rodada: rodadaAtual,
-                            },
-                          ]);
-                        }}
-                        disabled={turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)}
+                        onClick={finishOwnTurn}
+                        disabled={missionCombat.busy || turnOrder[turnIndex] !== user.id || turnDoneBy.includes(user.id)}
                         style={{
                           ...styles.btnStep,
                           width: "100%",
@@ -4682,24 +3877,8 @@ export default function AppContent() {
                     )}
                     {isDM && turnOrder.length > 0 && turnOrder[turnIndex] !== user.id && (
                       <button
-                        onClick={async () => {
-                          const currentId = turnOrder[turnIndex];
-                          if (!currentId || turnDoneBy.includes(currentId)) return;
-                          if (!(await emitCombatFlow("TURN_DONE", {
-                            userId: currentId,
-                            round: rodadaAtual,
-                          }))) return;
-                          const currentName =
-                            combatParticipants.find((p) => p.userId === currentId)?.nome ||
-                            "Inimigo";
-                          await appendCombatLog([
-                            {
-                              personagem: "SISTEMA A.S.A.",
-                              acao: `Mestre encerrou o turno de ${currentName}.`,
-                              rodada: rodadaAtual,
-                            },
-                          ]);
-                        }}
+                        onClick={finishCurrentTurn}
+                        disabled={missionCombat.busy || turnDoneBy.includes(turnOrder[turnIndex])}
                         style={{
                           ...styles.btnStep,
                           width: "100%",
@@ -4959,6 +4138,7 @@ export default function AppContent() {
                   {isDM ? (
                     <button
                       onClick={avancarRodada}
+                      disabled={missionCombat.busy}
                       style={{
                         ...styles.btnStep,
                         marginTop: "20px",
@@ -5083,8 +4263,7 @@ export default function AppContent() {
             </div>
           </div>
         )}
-        {/* ABA 6: INVENTÁRIO */}
-        {activeTab === "inventario" && (
+        {actionTab === "inventario" && (
           <div style={styles.container}>
             <div style={styles.statusBox}>
               <h2 style={styles.sectionTitle}>MÓDULO_DE_INVENTÁRIO</h2>
@@ -5972,6 +5151,821 @@ export default function AppContent() {
             </div>
           </div>
         )}
+    </fieldset>;
+  }
+
+  return (
+    <div className="with-sync" style={styles.body}>
+        {syncIndicator}
+      <button
+        onClick={signOut}
+        style={{
+          position: "fixed",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "10px" : "20px",
+          zIndex: 9999,
+          background: "#ff1744",
+          color: "#fff",
+          border: "none",
+          padding: isMobile ? "8px 12px" : "10px 14px",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
+          boxShadow: "0 0 10px rgba(255, 23, 68, 0.4)",
+        }}
+      >
+        Sair
+      </button>
+      <button
+        onClick={() => setPreMissionReady(false)}
+        style={{
+          position: "fixed",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "164px" : "208px",
+          zIndex: 9999,
+          background: "#10131a",
+          color: "#d1d5db",
+          border: "1px solid #3a3f4b",
+          padding: isMobile ? "8px 10px" : "10px 12px",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontWeight: "bold",
+          fontSize: isMobile ? "11px" : "13px",
+        }}
+      >
+        Missão/Personagem
+      </button>
+      <button
+        onClick={restartCharacterSetup}
+        style={{
+          position: "fixed",
+          top: isMobile ? "10px" : "20px",
+          right: isMobile ? "90px" : "96px",
+          zIndex: 9999,
+          background: "#1a1b22",
+          color: colors.brand,
+          border: `1px solid ${colors.brand}66`,
+          padding: isMobile ? "8px 10px" : "10px 12px",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontWeight: "bold",
+          fontSize: isMobile ? "12px" : "14px",
+        }}
+      >
+        Recomeçar
+      </button>
+      {/* 👇 ANIMAÇÃO DE RITUAIS 👇 */}
+      <style>
+        {`
+          @keyframes ritualCast {
+            0% { opacity: 0; filter: contrast(1); }
+            15% { opacity: 1; filter: contrast(1.3); }
+            100% { opacity: 0; filter: contrast(1); }
+          }
+        `}
+      </style>
+
+      {efeitoRitual && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            pointerEvents: "none", // 👈 MUITO IMPORTANTE: permite clicar "através" do efeito
+            zIndex: 10000,
+            background:
+              efeitoRitual === "Sangue"
+                ? "radial-gradient(circle, transparent 30%, rgba(255, 23, 68, 0.45) 100%)"
+                : efeitoRitual === "Morte"
+                ? "radial-gradient(circle, transparent 30%, rgba(10, 10, 15, 0.9) 100%)"
+                : efeitoRitual === "Conhecimento"
+                ? "radial-gradient(circle, transparent 30%, rgba(255, 209, 102, 0.45) 100%)"
+                : efeitoRitual === "Energia"
+                ? "radial-gradient(circle, transparent 30%, rgba(0, 229, 255, 0.45) 100%)"
+                : "radial-gradient(circle, transparent 30%, rgba(255, 255, 255, 0.6) 100%)", // Medo
+            boxShadow: `inset 0 0 150px ${
+              efeitoRitual === "Sangue"
+                ? "#ff1744"
+                : efeitoRitual === "Morte"
+                ? "#000000"
+                : efeitoRitual === "Conhecimento"
+                ? "#ffd166"
+                : efeitoRitual === "Energia"
+                ? "#00e5ff"
+                : "#ffffff"
+            }`,
+            animation: "ritualCast 1.5s ease-out forwards",
+          }}
+        />
+      )}
+      {/* 👆 FIM DA ANIMAÇÃO 👆 */}
+      {nexPopup && (
+        <div style={styles.popupOverlay}>
+          <div role="dialog" aria-modal="true" aria-label="Progressão de NEX" data-asa-dialog="nex" tabIndex={-1} style={styles.popupBox}>
+            <h3
+              style={{
+                marginTop: 0,
+                color: colors.brand,
+                letterSpacing: "2px",
+              }}
+            >
+              NEX {nexPopup.to}% DESBLOQUEADO
+            </h3>
+            <p
+              style={{
+                color: "#8fb7c4",
+                fontSize: "12px",
+                marginBottom: "18px",
+              }}
+            >
+              Novos acessos liberados na progressão.
+            </p>
+            {nexPopup.unlocks.map((item, i) => (
+              <div key={`${item.nome}-${i}`} style={styles.popupItem}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    marginBottom: "6px",
+                  }}
+                >
+                  <strong style={{ color: "#fff" }}>{item.nome}</strong>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: colors.pe,
+                      background: "rgba(197, 160, 0, 0.1)",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    NEX {item.nex}%
+                  </span>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#aaa",
+                    fontSize: "12px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+            <button
+              onClick={() => setNexPopup(null)}
+              style={{
+                ...styles.btnStep,
+                marginTop: "10px",
+                padding: "10px 14px",
+                borderColor: colors.brand,
+                color: colors.brand,
+                width: "100%",
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 👇 MODAL DA BIBLIOTECA DE RITUAIS (EM TELA CHEIA) 👇 */}
+      {isRitualModalOpen && (
+        <div
+          style={{
+            ...styles.popupOverlay,
+            width: "100vw",
+            height: "100vh",
+            top: 0,
+            left: 0,
+          }}
+          onClick={() => setIsRitualModalOpen(false)}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Biblioteca arcana" data-asa-dialog="ritual" tabIndex={-1}
+            style={{
+              ...styles.popupBox,
+              width: "100%",
+              maxWidth: "850px",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* CABEÇALHO DO MODAL */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+                borderBottom: `1px solid ${colors.brand}44`,
+                paddingBottom: "15px",
+              }}
+            >
+              <h2
+                style={{
+                  color: colors.brand,
+                  margin: 0,
+                  letterSpacing: "2px",
+                  fontSize: "18px",
+                }}
+              >
+                BIBLIOTECA ARCANA
+              </h2>
+              <button
+                onClick={() => setIsRitualModalOpen(false)}
+                style={{
+                  ...styles.btnStep,
+                  borderColor: colors.pv,
+                  color: colors.pv,
+                }}
+              >
+                FECHAR ✖
+              </button>
+            </div>
+
+            {/* FILTROS */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+              <select
+                value={filtroElemento}
+                onChange={(e) => setFiltroElemento(e.target.value)}
+                style={styles.selectField}
+              >
+                <option value="Todos">Todos os Elementos</option>
+                <option value="Conhecimento">Conhecimento</option>
+                <option value="Energia">Energia</option>
+                <option value="Medo">Medo</option>
+                <option value="Morte">Morte</option>
+                <option value="Sangue">Sangue</option>
+              </select>
+
+              <select
+                value={filtroCirculo}
+                onChange={(e) => setFiltroCirculo(e.target.value)}
+                style={styles.selectField}
+              >
+                <option value="Todos">Todos os Círculos</option>
+                <option value="1">1º Círculo</option>
+                <option value="2">2º Círculo</option>
+                <option value="3">3º Círculo</option>
+                <option value="4">4º Círculo</option>
+              </select>
+            </div>
+
+            {/* GRID DE RITUAIS FILTRADOS */}
+            <div
+              style={{
+                ...styles.tabGrid,
+                overflowY: "auto",
+                paddingRight: "10px",
+                flex: 1,
+              }}
+            >
+              {rituaisCatalog
+                .filter((r) => !rituaisSelecionados.includes(r.nome))
+                .filter(
+                  (r) =>
+                    filtroElemento === "Todos" || r.elemento === filtroElemento
+                )
+                .filter(
+                  (r) =>
+                    filtroCirculo === "Todos" ||
+                    r.circulo.toString() === filtroCirculo
+                )
+                .sort(
+                  (a, b) =>
+                    a.circulo - b.circulo ||
+                    a.elemento.localeCompare(b.elemento)
+                )
+                .map((r) => {
+                  let corRitual = colors.pe;
+                  if (r.elemento === "Morte") corRitual = "#9e9e9e";
+                  if (r.elemento === "Sangue") corRitual = "#ff1744";
+                  if (r.elemento === "Energia") corRitual = "#00e5ff";
+                  if (r.elemento === "Conhecimento") corRitual = "#ffd166";
+                  if (r.elemento === "Medo") corRitual = "#ffffff";
+
+                  return (
+                    <div
+                      key={r.nome}
+                      style={{
+                        ...styles.summaryCard,
+                        borderLeft: `3px solid ${corRitual}`,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <strong
+                            style={{
+                              color: "#fff",
+                              fontSize: "14px",
+                              letterSpacing: "1px",
+                            }}
+                          >
+                            {r.nome.toUpperCase()}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: corRitual,
+                              background: `${corRitual}11`,
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            {r.circulo}º CÍRCULO
+                          </span>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "11px",
+                            color: "#aaa",
+                            lineHeight: 1.6,
+                            margin: "0 0 15px 0",
+                            whiteSpace: "pre-line",
+                          }}
+                        >
+                          {r.desc}
+                          {r.discente && (
+                            <>
+                              <br />
+                              <br />
+                              <span style={{ color: "#00e5ff" }}>
+                                [ DISCENTE ]: {r.discente.desc}
+                              </span>
+                            </>
+                          )}
+                          {r.verdadeiro && (
+                            <>
+                              <br />
+                              <br />
+                              <span style={{ color: "#ffd166" }}>
+                                [ VERDADEIRO ]: {r.verdadeiro.desc}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() =>
+                          setRituaisSelecionados([
+                            ...rituaisSelecionados,
+                            r.nome,
+                          ])
+                        }
+                        style={{
+                          ...styles.btnStep,
+                          width: "100%",
+                          borderColor: corRitual,
+                          color: corRitual,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        + APRENDER
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+            {/* MENSAGEM SE NÃO ACHAR NADA */}
+            {rituaisCatalog.filter(
+              (r) =>
+                !rituaisSelecionados.includes(r.nome) &&
+                (filtroElemento === "Todos" || r.elemento === filtroElemento) &&
+                (filtroCirculo === "Todos" ||
+                  r.circulo.toString() === filtroCirculo)
+            ).length === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "#666",
+                  padding: "40px 0",
+                }}
+              >
+                Nenhum ritual novo encontrado com esses filtros.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* 👆 FIM DO MODAL DE RITUAIS 👆 */}
+
+      <nav
+        style={{
+          ...styles.sidebar,
+          width: isMobile ? "58px" : "74px",
+          gap: isMobile ? "14px" : "24px",
+          padding: isMobile ? "12px 0" : "18px 0",
+        }}
+      >
+        <div
+          style={{
+            color: colors.brand,
+            fontWeight: "bold",
+            fontSize: "12px",
+            marginBottom: "20px",
+            letterSpacing: "2px",
+          }}
+        >
+          A.S.A
+        </div>
+        <button
+          onClick={() => setActiveTab("status")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "status" ? colors.brand : "#333",
+          }}
+          title="Bio-Monitor"
+        >
+          <TabGlyph tab="status" active={activeTab === "status"} />
+        </button>
+        <button
+          onClick={() => setActiveTab("classe")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "classe" ? colors.brand : "#333",
+          }}
+          title="Arquétipo"
+        >
+          <TabGlyph tab="classe" active={activeTab === "classe"} />
+        </button>
+        <button
+          onClick={() => setActiveTab("pericias")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "pericias" ? colors.brand : "#333",
+          }}
+          title="Perícias"
+        >
+          <TabGlyph tab="pericias" active={activeTab === "pericias"} />
+        </button>
+        <button
+          onClick={() => setActiveTab("rituais")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "rituais" ? colors.brand : "#333",
+          }}
+          title="Rituais"
+        >
+          <TabGlyph tab="rituais" active={activeTab === "rituais"} />
+        </button>
+        <button
+          onClick={() => setActiveTab("inventario")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "inventario" ? colors.brand : "#333",
+          }}
+          title="Inventário"
+        >
+          <TabGlyph tab="inventario" active={activeTab === "inventario"} />
+        </button>
+        {isDM && (
+          <button
+            onClick={() => setActiveTab("bestiario")}
+            style={{
+              ...styles.navBtn,
+              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+              color: activeTab === "bestiario" ? colors.brand : "#333",
+            }}
+            title="Bestiario"
+          >
+            <TabGlyph tab="bestiario" active={activeTab === "bestiario"} />
+          </button>
+        )}
+        <button
+          onClick={() => setActiveTab("combate")}
+          style={{
+            ...styles.navBtn,
+            fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+            color: activeTab === "combate" ? colors.brand : "#333",
+          }}
+          title="Mesa de Combate"
+        >
+          <TabGlyph tab="combate" active={activeTab === "combate"} />
+        </button>
+        <button type="button" onClick={()=>setActiveTab('mesa')} title="Mesa virtual" aria-label="Mesa virtual" aria-current={activeTab==='mesa'?'page':undefined} style={{...styles.navBtn,color:activeTab==='mesa'?'#c6a2f5':'#777'}}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16M15 5v16"/><circle cx="12" cy="11" r="2"/></svg>
+        </button>
+        {isDM && (
+          <button
+            onClick={() => setActiveTab("admin")}
+            style={{
+              ...styles.navBtn,
+              fontSize: isMobile ? "22px" : styles.navBtn.fontSize,
+              color: activeTab === "admin" ? colors.brand : "#333",
+            }}
+            title="Admin"
+          >
+            <TabGlyph tab="classe" active={activeTab === "admin"} />
+          </button>
+        )}
+      </nav>
+
+      <main
+        style={{
+          ...styles.mainContent,
+          marginLeft: isMobile ? "58px" : "74px",
+          width: isMobile ? "calc(100% - 58px)" : "calc(100% - 74px)",
+          padding: activeTab === 'mesa' ? (isMobile ? '62px 12px 12px' : '70px 20px 20px') : (isMobile ? "12px" : "20px"),
+        }}
+      >
+        {/* ABA 1: STATUS (BIO-MONITOR) */}
+        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel}/></React.Suspense>}
+        {activeTab === "status" && renderCharacterPanel("status")}
+        {activeTab === "classe" && renderCharacterPanel("classe")}
+        {/* ABA 3: PERÍCIAS */}
+        {activeTab === "pericias" && renderCharacterPanel("pericias")}
+        {activeTab === "rituais" && renderCharacterPanel("rituais")}
+        {activeTab === "bestiario" && isDM && (
+          <div style={styles.container}>
+            <div style={styles.statusBox}>
+              <h2 style={styles.sectionTitle}>BESTIARIO_A.S.A.</h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 0.9fr) 1.4fr",
+                  gap: "16px",
+                }}
+              >
+                <div style={{ display: "grid", gap: "10px", alignContent: "start" }}>
+                  <select
+                    value={selectedBestiary?.id || ""}
+                    onChange={(e) => setSelectedBestiaryId(e.target.value)}
+                    style={styles.selectField}
+                  >
+                    {bestiaryEntries.map((monster) => (
+                      <option key={monster.id} value={monster.id}>
+                        VD {monster.vd || "?"} - {monster.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => addMonsterToCombat(selectedBestiary)}
+                    style={{
+                      ...styles.btnStep,
+                      width: "100%",
+                      borderColor: colors.brand,
+                      color: colors.brand,
+                      padding: "10px",
+                    }}
+                  >
+                    Adicionar selecionado ao combate
+                  </button>
+                  {selectedBestiary?.custom && (
+                    <button
+                      onClick={() => removeCustomMonster(selectedBestiary.id)}
+                      style={{
+                        ...styles.btnStep,
+                        width: "100%",
+                        borderColor: colors.pv,
+                        color: colors.pv,
+                        padding: "10px",
+                      }}
+                    >
+                      Remover monstro customizado
+                    </button>
+                  )}
+
+                  <div
+                    style={{
+                      ...styles.summaryCard,
+                      borderColor: `${colors.brand}33`,
+                    }}
+                  >
+                    <div style={{ color: colors.brand, fontSize: "12px", marginBottom: "8px" }}>
+                      AMEACAS CADASTRADAS
+                    </div>
+                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
+                      {asaBestiary.length} do bestiario A.S.A. Tower 2077
+                      <br />
+                      {customBestiary.length} customizadas neste navegador
+                    </div>
+                  </div>
+                </div>
+
+                {selectedBestiary && (
+                  <div style={styles.summaryCard}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                        borderBottom: `1px solid ${colors.border}`,
+                        paddingBottom: "12px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ color: "#fff", margin: "0 0 6px 0" }}>
+                          {selectedBestiary.name}
+                        </h3>
+                        <div style={{ color: "#9ca3af", fontSize: "12px" }}>
+                          {selectedBestiary.type}
+                        </div>
+                      </div>
+                      <div style={{ color: colors.pe, fontWeight: "bold" }}>
+                        VD {selectedBestiary.vd || "?"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+                        gap: "10px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>Defesa:</strong>{" "}
+                        {selectedBestiary.defense || "-"}
+                      </div>
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>PV:</strong>{" "}
+                        {selectedBestiary.hp || "-"}
+                      </div>
+                      <div style={{ color: "#d1d5db", fontSize: "12px" }}>
+                        <strong style={{ color: colors.brand }}>Sentidos:</strong>{" "}
+                        {selectedBestiary.senses || "-"}
+                      </div>
+                    </div>
+
+                    <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
+                      <strong style={{ color: colors.brand }}>Resistencias:</strong>{" "}
+                      {selectedBestiary.resistances || "-"}
+                      <br />
+                      <strong style={{ color: colors.brand }}>Vulnerabilidades:</strong>{" "}
+                      {selectedBestiary.vulnerabilities || "-"}
+                    </div>
+
+                    {!!selectedBestiary.traits?.length && (
+                      <div style={{ marginTop: "14px" }}>
+                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
+                          TRAÇOS
+                        </div>
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {selectedBestiary.traits.map((trait, index) => (
+                            <div key={index} style={{ color: "#d1d5db", fontSize: "12px" }}>
+                              {trait}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!!selectedBestiary.actions?.length && (
+                      <div style={{ marginTop: "14px" }}>
+                        <div style={{ color: colors.pe, fontSize: "12px", marginBottom: "8px" }}>
+                          HABILIDADES
+                        </div>
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {selectedBestiary.actions.map((action, index) => (
+                            <div
+                              key={`${action.name}-${index}`}
+                              style={{
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: "8px",
+                                padding: "10px",
+                              }}
+                            >
+                              <div style={{ color: "#fff", fontWeight: "bold", fontSize: "12px" }}>
+                                {action.type} - {action.name}
+                              </div>
+                              <div style={{ color: "#aaa", fontSize: "12px", marginTop: "4px" }}>
+                                {action.text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.statusBox}>
+              <h2 style={styles.sectionTitle}>ADICIONAR_MONSTRO</h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  value={monsterDraft.name}
+                  onChange={(e) => updateMonsterDraft("name", e.target.value)}
+                  placeholder="Nome"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.vd}
+                  onChange={(e) => updateMonsterDraft("vd", e.target.value)}
+                  placeholder="VD"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.type}
+                  onChange={(e) => updateMonsterDraft("type", e.target.value)}
+                  placeholder="Tipo / papel"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.defense}
+                  onChange={(e) => updateMonsterDraft("defense", e.target.value)}
+                  placeholder="Defesa"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.hp}
+                  onChange={(e) => updateMonsterDraft("hp", e.target.value)}
+                  placeholder="PV"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.senses}
+                  onChange={(e) => updateMonsterDraft("senses", e.target.value)}
+                  placeholder="Sentidos / iniciativa"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.resistances}
+                  onChange={(e) => updateMonsterDraft("resistances", e.target.value)}
+                  placeholder="Resistencias"
+                  style={styles.selectField}
+                />
+                <input
+                  value={monsterDraft.vulnerabilities}
+                  onChange={(e) => updateMonsterDraft("vulnerabilities", e.target.value)}
+                  placeholder="Vulnerabilidades"
+                  style={styles.selectField}
+                />
+                <textarea
+                  value={monsterDraft.traitsText}
+                  onChange={(e) => updateMonsterDraft("traitsText", e.target.value)}
+                  placeholder="Traços, um por linha"
+                  rows={5}
+                  style={{ ...styles.selectField, resize: "vertical" }}
+                />
+                <textarea
+                  value={monsterDraft.actionsText}
+                  onChange={(e) => updateMonsterDraft("actionsText", e.target.value)}
+                  placeholder={"Habilidades, uma por linha\nEx: Garra: Teste 3d20+10 | Dano 2d8"}
+                  rows={5}
+                  style={{ ...styles.selectField, resize: "vertical" }}
+                />
+              </div>
+              <button
+                onClick={saveCustomMonster}
+                style={{
+                  ...styles.btnStep,
+                  marginTop: "12px",
+                  width: "100%",
+                  padding: "12px",
+                  borderColor: colors.brand,
+                  color: colors.brand,
+                }}
+              >
+                Salvar monstro no bestiario
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE) */}
+        {/* ABA 5: COMBATE / MESA (MÓDULO DO MESTRE & TIMELINE) */}
+        {activeTab === "combate" && renderCharacterPanel("combate")}
+        {/* ABA 6: INVENTÁRIO */}
+        {activeTab === "inventario" && renderCharacterPanel("inventario")}
         {activeTab === "admin" && isDM && (
           <div style={styles.container}>
             <div style={styles.statusBox}>

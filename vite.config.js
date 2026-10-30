@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
       'REACT_APP_SUPABASE_URL', 'REACT_APP_SUPABASE_ANON_KEY',
       'REACT_APP_AUTH_REDIRECT_URL', 'REACT_APP_BYPASS_AUTH',
     ].map((key) => [`process.env.${key}`, JSON.stringify(env[key] || '')])),
-    test: { environment: 'jsdom', globals: false, testTimeout: 30000 },
+    test: { maxWorkers: 3, hookTimeout: 30000, environment: 'jsdom', globals: false, testTimeout: 30000 },
     build: { chunkSizeWarningLimit: 700 },
   };
 });

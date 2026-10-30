@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   canMoveToken,
   darkRooms,
@@ -11,7 +11,7 @@ import {
 // one-unit-per-cell viewBox can be enlarged by the browser's minimum font size.
 const CELL = 64;
 
-export default function TabletopBoard({
+function BoardContent({
   scene,
   tokens,
   images = {},
@@ -21,6 +21,7 @@ export default function TabletopBoard({
   tool = "move",
   busy = false,
   selectedId,
+  activeTokenId,
   onSelect = () => {},
   onMove,
   onFog,
@@ -328,6 +329,7 @@ export default function TabletopBoard({
             onKeyDown={(e) => keyMove(e, token)}
           >
             <title>{token.name}</title>
+            {activeTokenId === token.id && <circle className="vt-turn-ring" aria-label="Turno atual" cx={token.size * CELL / 2} cy={token.size * CELL / 2} r={token.size * CELL * 0.55} fill="none" stroke="#8fe4dc" strokeWidth="3" strokeDasharray="6 5" pointerEvents="none" />}
             <circle
               cx={(token.size * CELL) / 2}
               cy={(token.size * CELL) / 2}
@@ -438,4 +440,15 @@ export default function TabletopBoard({
       )}
     </svg>
   );
+}
+
+const MemoBoard = React.memo(BoardContent);
+export default function TabletopBoard(props) {
+  const latest = useRef(props);
+  latest.current = props;
+  const handlers = useMemo(() => Object.fromEntries(
+    ['onSelect', 'onMove', 'onFog', 'onRoom', 'onSpawn'].map((name) =>
+      [name, (...args) => latest.current[name]?.(...args)]),
+  ), []);
+  return <MemoBoard {...props} {...handlers} />;
 }
