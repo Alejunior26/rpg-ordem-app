@@ -45,9 +45,16 @@ describe("protected campaign image delivery", () => {
     expect(mock.file).not.toHaveBeenCalled();
   });
   it("only serves the catalog to a manager with access to that mission", async () => {
-    mock.rpc.mockResolvedValueOnce({ data: false });
+    mock.rpc.mockResolvedValueOnce({ data: true }).mockResolvedValueOnce({ data: false });
     expect((await GET(request(""))).status).toBe(403);
     expect(mock.file).not.toHaveBeenCalled();
+  });
+  it("does not serve story assets or the catalogue to a generic mission", async () => {
+    mock.rpc.mockResolvedValue({ data: false });
+    expect((await GET(request(""))).status).toBe(404);
+    expect((await GET(request("&asset=A13"))).status).toBe(404);
+    expect(mock.file).not.toHaveBeenCalled();
+    expect(mock.select).not.toHaveBeenCalled();
   });
   it("serves an authorized image as private PNG without public caching", async () => {
     const result = await GET(request("&asset=A01"));

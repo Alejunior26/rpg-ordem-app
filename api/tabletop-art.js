@@ -27,6 +27,8 @@ export async function GET(request) {
     },
   );
   try {
+    const pack = await client.rpc("asa_has_campaign_pack", { target: mission });
+    if (pack.error || pack.data !== true) return fail(404);
     if (!id) {
       const [role, access] = await Promise.all([
         client.rpc("is_dm_or_admin"),

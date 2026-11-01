@@ -1,7 +1,8 @@
 import { useAuth } from "./auth/AuthProvider";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { asaBestiary } from "./data/asaBestiary";
+import { useMissionBestiary } from "./hooks/useMissionBestiary";
+import MissionLibrary, { BestiaryArtwork } from "./components/MissionLibrary";
 import ActionConditions from "./components/ActionConditions";
 import { resolveCombatMonster } from "./lib/combatBestiary";
 
@@ -475,7 +476,7 @@ export default function AppContent() {
   const isAdmin = normalizedRole === "admin";
   const isDM = canManageTable(normalizedRole);
   const storageKey = useMemo(() => `asa-sheet-v2:${user.id}`, [user.id]);
-  const bestiaryStorageKey = useMemo(() => `asa-bestiary-v1:${user.id}`, [user.id]);
+
 
   // ==========================================
   // 1. TODOS OS ESTADOS (useState) PRIMEIRO!
@@ -514,11 +515,14 @@ export default function AppContent() {
   const [selectedOrderDraft, setSelectedOrderDraft] = useState([]);
   const [npcNameInput, setNpcNameInput] = useState("");
   const [customBestiary, setCustomBestiary] = useState([]);
-  const [customBestiaryReady, setCustomBestiaryReady] = useState(false);
+  const [customBestiaryReady, setCustomBestiaryReady] = useState("");
   const [monsterDraft, setMonsterDraft] = useState(emptyMonsterDraft);
-  const [selectedBestiaryId, setSelectedBestiaryId] = useState(asaBestiary[0]?.id || "");
+  const [selectedBestiaryId, setSelectedBestiaryId] = useState("");
   const [selectedMission, setSelectedMission] = useState("");
   const [missions, setMissions] = useState([]);
+  const contentPack = missions.find(m=>m.id===selectedMission)?.content_pack || "generic";
+  const missionBestiary = useMissionBestiary(selectedMission, isDM, contentPack);
+  const bestiaryStorageKey = `asa-bestiary-v2:${user.id}:${selectedMission}`;
   const [remoteCharactersReady, setRemoteCharactersReady] = useState(false);
   const [hydratedCharacterId, setHydratedCharacterId] = useState("");
   const [syncStatus, setSyncStatus] = useState({ state: "loading", message: "Carregando suas fichas…" });
@@ -644,8 +648,8 @@ export default function AppContent() {
   const isMobile = viewportWidth <= 900;
   const isSmallMobile = viewportWidth <= 520;
   const bestiaryEntries = useMemo(
-    () => [...asaBestiary, ...customBestiary],
-    [customBestiary]
+    () => [...missionBestiary.entries, ...(customBestiaryReady === bestiaryStorageKey ? customBestiary : [])],
+    [missionBestiary.entries, customBestiary, customBestiaryReady, bestiaryStorageKey]
   );
   const selectedBestiary = useMemo(
     () =>
@@ -672,19 +676,17 @@ export default function AppContent() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(bestiaryStorageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setCustomBestiary(parsed);
-      }
+      const parsed = saved ? JSON.parse(saved) : [];
+      setCustomBestiary(Array.isArray(parsed) ? parsed : []);
     } catch {
       setCustomBestiary([]);
     } finally {
-      setCustomBestiaryReady(true);
+      setCustomBestiaryReady(bestiaryStorageKey);
     }
   }, [bestiaryStorageKey]);
 
   useEffect(() => {
-    if (!customBestiaryReady) return;
+    if (customBestiaryReady !== bestiaryStorageKey || !selectedMission) return;
     try {
       localStorage.setItem(bestiaryStorageKey, JSON.stringify(customBestiary));
     } catch {
@@ -828,7 +830,7 @@ export default function AppContent() {
     setRemoteCharactersReady(false);
     try {
       const [missionResult, characterResult] = await Promise.all([
-        supabase.from("missions").select("id, name, description").order("created_at", { ascending: true }),
+        supabase.from("missions").select("id, name, description, content_pack").order("created_at", { ascending: true }),
         supabase.from("characters").select("id, name, mission_id, sheet_json, owner_id, revision").eq("owner_id", user.id).order("updated_at", { ascending: false }),
       ]);
       if (missionResult.error || characterResult.error) throw missionResult.error || characterResult.error;
@@ -851,7 +853,7 @@ export default function AppContent() {
   async function createMission() {
     const name = window.prompt("Nome da missão:")?.trim();
     if (!name) return;
-    const { data, error } = await supabase.from("missions").insert({ name, created_by: user.id }).select("id, name, description").single();
+    const { data, error } = await supabase.from("missions").insert({ name, created_by: user.id, content_pack: "generic" }).select("id, name, description, content_pack").single();
     if (error) { setCampaignError("Não foi possível criar a missão."); return; }
     setMissions((prev) => [...prev, data]); setSelectedMission(data.id);
   }
@@ -952,7 +954,7 @@ export default function AppContent() {
 
   function removeCustomMonster(monsterId) {
     setCustomBestiary((prev) => prev.filter((monster) => monster.id !== monsterId));
-    if (selectedBestiaryId === monsterId) setSelectedBestiaryId(asaBestiary[0]?.id || "");
+    if (selectedBestiaryId === monsterId) setSelectedBestiaryId("");
   }
 
   async function resetCombatTable() {
@@ -2219,6 +2221,7 @@ export default function AppContent() {
           ))}
         </select>
         <button
+          disabled={!selectedBestiary}
           onClick={() => addMonsterToCombat(selectedBestiary)}
           style={{
             ...styles.btnStep,
@@ -2485,7 +2488,7 @@ export default function AppContent() {
               >
                 <img
                   src="https://i.imgur.com/kbm8h0V.png"
-                  alt="Maestro"
+                  alt="Símbolo de atributos"
                   style={{
                     width: "100%",
                     maxWidth: `${mandalaSize}px`,
@@ -5695,6 +5698,7 @@ export default function AppContent() {
         >
           <TabGlyph tab="combate" active={activeTab === "combate"} />
         </button>
+        <button type="button" onClick={()=>setActiveTab("materiais")} title="Materiais da missão" aria-label="Materiais da missão" style={{...styles.navBtn,color:activeTab==="materiais"?colors.brand:"#777",fontSize:"22px"}}>▤</button>
         <button type="button" onClick={()=>setActiveTab('mesa')} title="Mesa virtual" aria-label="Mesa virtual" aria-current={activeTab==='mesa'?'page':undefined} style={{...styles.navBtn,color:activeTab==='mesa'?'#c6a2f5':'#777'}}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16M15 5v16"/><circle cx="12" cy="11" r="2"/></svg>
         </button>
@@ -5723,7 +5727,8 @@ export default function AppContent() {
       >
         {syncIndicator}
         {/* ABA 1: STATUS (BIO-MONITOR) */}
-        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel} renderCombatDirection={renderCombatDirection}/></React.Suspense>}
+        {activeTab==='mesa' && <React.Suspense fallback={<p role="status">Abrindo a mesa virtual…</p>}><VirtualTabletop key={selectedMission} missionId={isUuid(selectedMission)?selectedMission:null} missionName={missions.find(m=>m.id===selectedMission)?.name} contentPack={contentPack} userId={user.id} manager={isDM} character={selectedCharacterId?{id:selectedCharacterId,name:nomePersonagem}:null} combat={missionCombat} onJoinCombat={joinCombat} onFinishOwnTurn={finishOwnTurn} onFinishCurrentTurn={finishCurrentTurn} onAdvanceRound={avancarRodada} renderCharacterPanel={renderCharacterPanel} renderCombatDirection={renderCombatDirection}/></React.Suspense>}
+        {activeTab === "materiais" && <MissionLibrary key={`${selectedMission}:${isDM}`} missionId={selectedMission} missionName={missions.find(m=>m.id===selectedMission)?.name} manager={isDM} contentPack={contentPack}/>}
         {activeTab === "status" && renderCharacterPanel("status")}
         {activeTab === "classe" && renderCharacterPanel("classe")}
         {/* ABA 3: PERÍCIAS */}
@@ -5732,7 +5737,8 @@ export default function AppContent() {
         {activeTab === "bestiario" && isDM && (
           <div style={styles.container}>
             <div style={styles.statusBox}>
-              <h2 style={styles.sectionTitle}>BESTIARIO_A.S.A.</h2>
+              <h2 style={styles.sectionTitle}>BESTIÁRIO DA MISSÃO</h2>
+              {missionBestiary.error && <p role="alert">{missionBestiary.error}</p>}
               <div
                 style={{
                   display: "grid",
@@ -5753,6 +5759,7 @@ export default function AppContent() {
                     ))}
                   </select>
                   <button
+                    disabled={!selectedBestiary}
                     onClick={() => addMonsterToCombat(selectedBestiary)}
                     style={{
                       ...styles.btnStep,
@@ -5789,15 +5796,16 @@ export default function AppContent() {
                       AMEACAS CADASTRADAS
                     </div>
                     <div style={{ color: "#d1d5db", fontSize: "12px", lineHeight: 1.6 }}>
-                      {asaBestiary.length} do bestiario A.S.A. Tower 2077
+                      {missionBestiary.entries.length} fichas desta missão
                       <br />
-                      {customBestiary.length} customizadas neste navegador
+                      {customBestiary.length} customizadas nesta missão e navegador
                     </div>
                   </div>
                 </div>
 
                 {selectedBestiary && (
                   <div style={styles.summaryCard}>
+                    <BestiaryArtwork key={`${selectedMission}:${selectedBestiary.code}`} missionId={selectedMission} code={selectedBestiary.code}/>
                     <div
                       style={{
                         display: "flex",
