@@ -1,9 +1,6 @@
-import { asaBestiary } from '../data/asaBestiary';
-
-// Built-in IDs keep their current rules even when the combat saved an older card.
-// This only resolves the displayed reference; it never changes persisted combat state.
-export function resolveCombatMonster(participant, entries = asaBestiary) {
+// Only the active mission's catalogue can update an old saved combat card.
+// Saved snapshots still work without fetching a different campaign's catalogue.
+export function resolveCombatMonster(participant, entries = []) {
   const id = participant.monsterId || participant.monster?.id;
-  const current = asaBestiary.find((monster) => monster.id === id);
-  return current || participant.monster || entries.find((monster) => monster.id === id);
+  return entries.find((monster) => monster.id === id) || participant.monster;
 }

@@ -54,6 +54,7 @@ export function TabletopView({
   roster = [],
   missionId,
   missionName,
+  contentPack,
   userId,
   manager,
   character,
@@ -1004,6 +1005,7 @@ export function TabletopView({
                   Biblioteca da campanha{" "}
                   <span className="vt-count">{table.assets.length}</span>
                 </summary>
+                {contentPack === "asa_tower_2077" && <>
                 <p className="vt-muted">
                   A.S.A. Tower 2077: artes revisadas e cenários preparados para
                   explorar.
@@ -1023,14 +1025,14 @@ export function TabletopView({
                 >
                   Adicionar mapas e tokens v6
                 </button>
+                </>}
                 {notice && (
                   <p className="vt-muted" role="status">
                     {notice}
                   </p>
                 )}
                 <p className="vt-muted">
-                  Importe a pasta ASA_Tower_2077 descompactada para trazer os mapas
-                  e as artes, incluindo os novos Portadores.
+                  Importe uma pasta com os mapas e as artes da missão selecionada.
                 </p>
                 <label className="vt-upload-label">
                   Importar pasta da campanha

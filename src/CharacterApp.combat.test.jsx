@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-const fake = vi.hoisted(() => ({ user: {id: '00000000-0000-4000-8000-000000000001', email: 'player@example.test'}, rpc: vi.fn(), channels: [], logs: [], role: 'player', state: null, logError: null, noCharacters: false }));
+const fake = vi.hoisted(() => ({ user: {id: '00000000-0000-4000-8000-000000000001', email: 'player@example.test'}, rpc: vi.fn(), channels: [], logs: [], role: 'player', state: null, logError: null, noCharacters: false, contentPack: 'generic', bestiary: [] }));
 const userId = '00000000-0000-4000-8000-000000000001';
 const missionId = '00000000-0000-4000-8000-000000000010';
 const characterId = '00000000-0000-4000-8000-000000000020';
@@ -17,8 +17,8 @@ vi.mock('./lib/supabase', () => ({supabase: {
     let insert;
     const filters = [];
     const builder = {select(){return this;},eq(k,v){filters.push([k,v]);return this;},gte(){return this;},order(){return this;},limit(){return this;},insert(rows){insert=rows; return this;},then(resolve) {
-      const mission={id:missionId,name:'Missão de teste'};
-      let data=table==='missions'?[mission]:table==='characters'?(fake.noCharacters?[]:[{id:characterId,owner_id:userId,name:'Agent A',mission_id:missionId,revision:0,sheet_json:{nomePersonagem:'Agent A',pvAtual:11,setupComplete:true}}]):table==='asa_combat_log'?fake.logs:[];
+      const mission={id:missionId,name:'Missão de teste',content_pack:fake.contentPack};
+      let data=table==='missions'?[mission]:table==='characters'?(fake.noCharacters?[]:[{id:characterId,owner_id:userId,name:'Agent A',mission_id:missionId,revision:0,sheet_json:{nomePersonagem:'Agent A',pvAtual:11,setupComplete:true}}]):table==='asa_combat_log'?fake.logs:table==='asa_mission_bestiary'?fake.bestiary.map(data=>({mission_id:missionId,data})):[];
       if(insert) {data=insert.map((r,i)=>({...r,id:fake.logs.length+i+1,author_id:userId})); fake.logs=[...data,...fake.logs];}
       if(table!=='asa_combat_log') for(const [k,v] of filters) data=data.filter(r=>r[k]===v);
       return Promise.resolve({data,error:insert?fake.logError:null}).then(resolve);
@@ -26,7 +26,7 @@ vi.mock('./lib/supabase', () => ({supabase: {
   },
 }}));
 beforeEach(() => {
-  window.localStorage.clear(); fake.role='player'; fake.channels=[]; fake.logs=[]; fake.logError=null; fake.noCharacters=false;
+  window.localStorage.clear(); fake.role='player'; fake.channels=[]; fake.logs=[]; fake.logError=null; fake.noCharacters=false; fake.contentPack='generic'; fake.bestiary=[];
   fake.state={mission_id:missionId,version:1,rodada:3,participants:[],turn_order:[],turn_index:0,turn_done_by:[],reset_at:'2026-01-01'};
   fake.rpc.mockReset(); fake.rpc.mockImplementation(async(name,p)=>{
     if(name==='asa_save_character') return {data:{revision:p.p_expected_revision+1}};
@@ -138,12 +138,13 @@ it('executes the original ability handler from the table and reports a rejected 
 });
 
 it('shows revised monster actions and their conditions for an old saved encounter and logs the revised text', async () => {
-  fake.role = 'dm';
+  fake.role = 'dm'; fake.contentPack='asa_tower_2077';
+  fake.bestiary=[{id:'maestro',actions:[{name:'Fechar o Palco',type:'Completa',text:'Não causa dano, não atordoa e não convoca Portadores. Tecnologia DT 20.',condition_ids:['cego']}]}];
   const legacy = { id: 'maestro', actions: [{ name: 'Fechar o Palco', type: 'Completa', text: 'Texto antigo: convoca 1 Portador em 1d3 rodadas.' }] };
   fake.state.participants = [{ userId: 'monster:maestro:legacy', nome: 'Maestro em cena', kind: 'monster', monsterId: 'maestro', monster: legacy }];
   const before = JSON.stringify(fake.state.participants);
   await openTable();
-  expect(screen.queryByText(/Texto antigo:/)).toBeNull();
+  await waitFor(()=>expect(screen.queryByText(/Texto antigo:/)).toBeNull());
   const button = screen.getByRole('button', { name: 'Usar Fechar o Palco de Maestro em cena' });
   const card = button.closest('.combat-monster-action');
   expect(card.textContent).toContain('Não causa dano, não atordoa e não convoca Portadores');

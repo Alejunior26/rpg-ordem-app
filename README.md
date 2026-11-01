@@ -2,6 +2,16 @@
 
 Aplicação React para fichas, inventário, bestiário e combate por missão. O cliente usa somente a chave publicável do Supabase; autorização é aplicada no PostgreSQL.
 
+## Materiais e missões de teste
+
+Missões novas usam `content_pack=generic`: recebem apenas um NPC de treinamento e não carregam o bestiário ou o catálogo de artes da campanha. As fichas da campanha são lidas de `asa_mission_bestiary`, somente pelo mestre da missão. Fichas customizadas do navegador também são separadas por usuário e missão; a chave local antiga é preservada, sem importação automática para outra história.
+
+A aba **Materiais da missão** lista somente registros autorizados por RLS. Livros completos e notas de localização ficam reservados ao mestre; notas são armazenadas em uma tabela separada dos itens entregáveis. Fotografias e documentos começam ocultos e o mestre pode entregar ou recolher cada um. Recolher impede novos acessos pelo site; uma cópia que um jogador já baixou continua no dispositivo dele.
+
+Arquivos ficam no bucket privado `asa-materials`, sem URLs públicas. PDFs maiores são enviados em partes de até 5 MiB e reunidos no navegador depois da autorização de leitura. A importação usa `manifest.json` e os arquivos correspondentes selecionados juntos; o pacote precisa corresponder ao conteúdo da missão. Arquivos incompletos não são liberados. A migração é `supabase/migrations/20261101025152_mission_library.sql`; os documentos e a carga de conteúdo da campanha não entram no repositório público.
+
+O isolamento do aplicativo não remove conteúdo que já tenha aparecido no histórico público do GitHub. Não publique material reservado em `public/` ou no código do cliente.
+
 ## Desenvolvimento
 
 Requer Node.js 22.12 ou superior; CI usa Node 24.
